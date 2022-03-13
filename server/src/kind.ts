@@ -1,0 +1,37 @@
+const enum Kind{
+	// token kind
+	atom=1,
+	variable,
+	float,
+	integer,
+	string, 
+	back_quoted_string, 
+	open,
+	close,
+	open_list,
+	close_list,
+	open_curly,
+	close_curly,
+	ht_sep,
+	comma,
+	end,
+	// node kind
+	VarNode, 
+	NegativeNode, 
+	FunctorNode, 
+	AtomNode, 
+	ListNode, 
+	ParenNode, 
+	StringNode, 
+	CurlyNode, 
+	BackQuotedNode, 
+	InfixopNode, 
+	PostfixopNode,
+	InfixOpArgNode,
+	CommaNode,
+	SemicolonNode,
+	PostfixOpArgNode,
+	PrefixOpArgNode,
+	ClauseNode
+
+}
