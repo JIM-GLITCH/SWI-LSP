@@ -1,3 +1,3 @@
 # SWI Prolog LSP
-[x] outline
-[ ] ???
+- [x] outline
+- [ ] ? ? ?
