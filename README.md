@@ -1,3 +1,4 @@
 # SWI Prolog LSP
-- [x] outline
-- [ ] ? ? ?
+- [x] Outline
+- [ ] Diagnostics（buggy）
+
