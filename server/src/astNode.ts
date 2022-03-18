@@ -19,7 +19,8 @@ export {
 	SemicolonNode,
 	PostfixOpArgNode,
 	PrefixOpArgNode,
-	ClauseNode
+	ClauseNode,
+	IntegerNode
 };
 function combineRange(r1: Range, r2: Range): Range {
 	return { start: r1.start, end: r2.end };
@@ -68,7 +69,9 @@ class FunctorNode extends Node {
 	functor: token;
 	// open: token;
 	// close: token;
+	arg1:ArgNode;
 	arity:number;
+	restArgs: AtomNode | ListNode;
 	constructor(functor: token,Arg1: any,RestArgs:ListNode|AtomNode) {
 		super(functor,RestArgs);
 		this.functor = functor;
@@ -78,6 +81,16 @@ class FunctorNode extends Node {
 		else{
 			this.arity=1;
 		}
+		this.arg1 =Arg1;
+		this.restArgs = RestArgs;
+	}
+}
+class IntegerNode extends Node{
+	kind = Kind.IntegerNode;
+	functor: token;
+	constructor(head:token,tail?:token) {
+		super(head,tail);
+		this.functor = head;
 	}
 }
 class AtomNode extends Node {

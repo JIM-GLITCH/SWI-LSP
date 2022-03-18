@@ -4,9 +4,9 @@
 
 import fs = require("fs");
 import { integer, Range } from 'vscode-languageserver';
-import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopNode, ListNode, NegativeNode, PostfixOpArgNode, PostfixopNode, PrefixOpArgNode, SemicolonNode, StringNode, VarNode } from './astNode';
+import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopNode, ListNode, NegativeNode, PostfixOpArgNode, PostfixopNode, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode } from './astNode';
 import { read_tokens, token, InputStream, stream, tokenType } from "./lexer";
-import { current_op } from './op_table';
+import { current_op, op } from './op_table';
 import { pushError } from './pushDiagnostic';
 import {Flag} from "./context_flags";
 export { parseText };
@@ -40,6 +40,7 @@ function parseText(text: string) {
 		const Answer = readClause(tokens);
 		if (Answer !== undefined)
 			clauses.push(Answer);
+		postParse(Answer);           
 	}
 	return clauses;
 }
@@ -59,8 +60,8 @@ function ArrayToLinkedList(tokens: token[]) {
 
 function readClause(tokens: token[]) {
 	// const tokens = read_tokens(InputStream(text));
-	if (tokens === undefined)
-		return undefined;
+	// if (tokens === undefined)
+	// 	return undefined;
 	const tokenList = ArrayToLinkedList(tokens);
 	const [flag1, Term, LeftOver] = read(tokenList.firstToken, 1200,0);
 	const flag2 = (tokenList.lastToken?.functor ==".");
@@ -195,10 +196,9 @@ function getToken(tokenlist: token, Wantedtoken: WantedToken): [false] | [true, 
 
 }
 
-function read(tokenList: token|undefined, Precedence: number,context_flags:number): [false] | [true, any, token?] {
-	if (tokenList == undefined) return [false];
-	const head = tokenList;
-	const tail = tokenList.next;
+function read(head: token|undefined, Precedence: number,context_flags:number): [false] | [true, any, token?] {
+	if (head == undefined) return [false];
+	const tail = head.next;
 	switch (head.type) {
 		case Kind.variable:
 			return read_var(head, tail, Precedence,context_flags);
@@ -246,7 +246,7 @@ function read_name(head: token, tail: token|undefined, Precedence: number,contex
 }
 
 function read_integer(head: token, tail: token|undefined, Precedence: number,context_flags:number) {
-	return exprtl0(tail, head, Precedence,context_flags);
+	return exprtl0(tail, new IntegerNode(head), Precedence,context_flags);
 }
 function read_open_list(head: token, tail: token|undefined, Precedence: number,context_flags:number): [true, any, token?] | [false] {
 	// TODO Flag
@@ -357,7 +357,7 @@ function after_prefix_op(Op: token, Oprec: number, Aprec: number, S0: token|unde
 
 		const flag2 = prefix_is_atom(S1, Oprec);
 		if (flag2) {
-			const [flag3, Answer, S] = exprtl(S1, Oprec, Op, Precedence,context_flags);
+			const [flag3, Answer, S] = exprtl(S1, Oprec, new AtomNode(Op), Precedence,context_flags);
 			if (flag3)
 				return [true, Answer, S];
 		}
@@ -567,4 +567,23 @@ function exprtl(head: token|undefined, C: number, Term: any, Precedence: number,
 
 
 
+/**
+ *  `:-op(Prece,Type,Name).` change the grammar inmmediately!
+ */
+function postParse(Answer: ClauseNode | undefined) {
+	const term = Answer?.term;
+	if (!term ){
+		return;
+	}
+	// 
+	if(term instanceof PrefixOpArgNode && term.functor.functor ==":-"){
+		const node = term.arg;
+		if (node instanceof FunctorNode && node.functor.functor=="op"&& node.arity == 3){
+			const prec = Number(node.arg1.functor.functor);
+			const type = (node.restArgs as ListNode).left.functor.functor;
+			const  name = (node.restArgs as ListNode).right.left.functor.functor;//Bug here Atom ? token?
+			op(prec,type,name);
+		}
+	}
+}
 // debug();

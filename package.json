@@ -1,14 +1,14 @@
 {
-	"name": "lsp-sample",
-	"description": "A language server example",
-	"author": "keke",
+	"name": "swi-lsp",
+	"description": "A language server for SWI-Prolog",
+	"author": "lilr",
 	"license": "MIT",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Microsoft/vscode-extension-samples"
+		"url": "https://github.com/JIM-GLITCH/SWI-LSP"
 	},
-	"publisher": "keke",
+	"publisher": "lilr",
 	"categories": [],
 	"keywords": [
 		"multi-root ready"
@@ -28,7 +28,7 @@
 				"languageServerExample.maxNumberOfProblems": {
 					"scope": "resource",
 					"type": "number",
-					"default": 100,
+					"default": 1000,
 					"description": "Controls the maximum number of problems produced by the server."
 				},
 				"languageServerExample.trace.server": {
