@@ -267,7 +267,7 @@ class PrefixOpArgNode extends Node{
 }
 /**
  * ClauseNode 对应一个clause。
- * term end 中有一个可能是undefined
+ * term, end 中有一个可能是undefined
  */
 class ClauseNode extends Node{
 	kind=Kind.ClauseNode;

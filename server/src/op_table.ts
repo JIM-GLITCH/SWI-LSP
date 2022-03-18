@@ -88,6 +88,10 @@ const opTypeSet = new Set(["fx"
 	, "xfx"]);
 const userdefined_op_table: Map<string, Map<string, integer>> = new Map();
 function op(opPrecedence: number, opType: string, opName: string) {
+	// 如果是单引号 括起来的 去掉单引号
+	if (opName[0]=="'" && opName[opName.length-1]=="'"){
+		opName = opName.slice(1,-1);
+	}
 	// 	It is not allowed to redefine the comma (',').
 	// The bar (|) can only be (re-)defined as infix operator with priority not less than 1001.
 	// It is not allowed to define the empty list ([]) or the curly-bracket pair ({}) as operators.
@@ -104,7 +108,7 @@ function op(opPrecedence: number, opType: string, opName: string) {
 	}
 	// optype 符合规范
 	if (!opTypeSet.has(opType)){
-		// TODO pushError No permission to modify operator `',''
+		// TODO pushError `',''
 		return;
 	}
 	// 如果 precedence == 0 表示要废除 这个 operator
