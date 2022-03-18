@@ -1,4 +1,6 @@
 # SWI Prolog LSP
 - [x] Outline
-- [ ] Diagnostics（bug）
+- [x] Diagnostics（bug）
+- [x] support user defined operator 
+- [ ] ???
 
