@@ -217,9 +217,16 @@ connection.onCompletion(
 		];
 	}
 );
-connection.onDocumentSymbol((_params)=>{
+const sleep=(ms:number)=>{
+    return new Promise(resolve=>setTimeout(resolve,ms));
+};
+connection.onDocumentSymbol(async(_params)=>{
 	const file= _params.textDocument.uri;
-		return getSymbols(fileAstMap.get(file)??[]);
+	let AST;
+	while (!(AST=fileAstMap.get(file))){
+		await sleep(100);
+	}
+	return getSymbols(AST);
 });
 
 // This handler resolves additional information for the item selected in
@@ -236,7 +243,9 @@ connection.onCompletionResolve(
 		return item;
 	}
 );
-
+// connection.onDidOpenTextDocument(async(_params)=>{
+// 	validateTextDocument(_params);
+// });
 // Make the text document manager listen on the connection
 // for open, change and close text document events
 documents.listen(connection);
