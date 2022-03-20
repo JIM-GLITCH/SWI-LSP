@@ -48,7 +48,7 @@ interface token {
 	 * layout and token range
 	 */
 	fullRange: Range
-	type: Kind;
+	kind: Kind;
 
 }
 
@@ -108,7 +108,7 @@ function token_list(s: stream) {
 }
 function atoken(stream: stream): token | undefined {
 	return tok_or_gen([
-		name,
+		atom,
 		variable,
 		float,
 		integer,
@@ -148,8 +148,8 @@ function setStreamState(s: stream, state: [uinteger, uinteger, uinteger]): undef
 
 type tokenType = Kind;
 
-function name(s: stream){
-	return token_func_gen(name_token,Kind.atom)(s);
+function atom(s: stream){
+	return token_func_gen(atom_token,Kind.atom)(s);
 }
 
 
@@ -199,7 +199,7 @@ function tok_or_gen(f:((s: stream) => any)[]):any{
 function semicolon_token(s:stream){
 	return getWantedChar(s,";");
 }
-const name_token=tok_or_gen([
+const atom_token=tok_or_gen([
 		letter_digit_token,
 		graphic_token,
 		quoted_token,
@@ -933,7 +933,7 @@ function token_func_gen(func:((s:stream)=>string|undefined),str:tokenType){
 				start:{line:line0,character:char0},
 				end:{line:line2,character:char2}
 			},
-			type:str
+			kind:str
 		};
 		};
 

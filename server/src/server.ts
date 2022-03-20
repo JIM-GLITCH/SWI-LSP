@@ -160,7 +160,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// 	const diagnostic: Diagnostic = {
 	// 		severity: DiagnosticSeverity.Warning,
 	// 		range: {
-	// 			start: textDocument.positionAt(m.index),
+				// start: textDocument.positionAt(m.index),
 	// 			end: textDocument.positionAt(m.index + m[0].length)
 	// 		},
 	// 		message: `${m[0]} is all uppercase.`,

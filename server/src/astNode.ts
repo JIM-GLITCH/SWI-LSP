@@ -168,7 +168,7 @@ class opNode implements token {
 	functor: string;
 	range: Range;
 	fullRange: Range;
-	type: tokenType;
+	kind: tokenType;
 	next?: any;
 	constructor(atom: token) {
 		// token interface
@@ -176,7 +176,7 @@ class opNode implements token {
 		this.functor = atom.functor;
 		this.range = atom.range;
 		this.fullRange = atom.fullRange;
-		this.type = atom.type;
+		this.kind = atom.kind;
 		this.next = atom.next;
 	}
 }
