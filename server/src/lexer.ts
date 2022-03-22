@@ -2,6 +2,7 @@
 import fs = require("fs");
 import { Range, uinteger } from 'vscode-languageserver';
 export {read_tokens, InputStream,token,stream,tokenType,debug,read_token_list};
+
 /**
  * test
  * 
@@ -27,16 +28,8 @@ interface stream {
 	char: uinteger;
 	pos: uinteger;
 }
-interface partialToken{
-	/**
-	 * token string
-	 */
-	functor: string;
-	range: Range;
-	kind: Kind;
-}
-interface token extends partialToken {
-	fullRange: Range
+
+interface token {
 	next?:token|undefined;
 	/**
 	 * leading spaces and comments
@@ -44,8 +37,19 @@ interface token extends partialToken {
 	
 	layout: string;
 	/**
+	 * token string
+	 */
+	functor: string;
+	/**
+	 * token range
+	 */
+	range: Range;
+	/**
 	 * layout and token range
 	 */
+	fullRange: Range
+	kind: Kind;
+
 }
 
 
@@ -71,7 +75,7 @@ function read_tokens(stream: stream) {
 	const tokens: token[] = token_list(stream);
 	const end_token =end(stream);
 
-	if(end_token) tokens.push(end_token as token);
+	if(end_token) tokens.push(end_token);
 
 	if (tokens.length == 0) return undefined;
 
@@ -110,10 +114,8 @@ function token_list(s: stream) {
 	}
 	return tokens;
 }
-function atoken(s: stream): token | undefined {
-	const [line0,char0]=[s.line,s.char];
-	const lay = layout_text_sequence(s);
-	const token=tok_or_gen([
+function atoken(stream: stream): token | undefined {
+	return tok_or_gen([
 		atom,
 		variable,
 		float,
@@ -128,20 +130,7 @@ function atoken(s: stream): token | undefined {
 		close_curly,
 		ht_sep,
 		comma
-	])(s);
-	if (token ==undefined){
-		return undefined;
-	}
-	token.layout = lay;
-	token.fullRange = {
-		start:{
-			line:line0,character:char0
-		},
-		end:{
-			line:s.line,char:s.char
-		}
-	}
-	return token;
+	])(stream);
 }
 
 
@@ -936,8 +925,10 @@ function token_func_gen(func:((s:stream)=>string|undefined),str:tokenType){
 	/**
 	 * @type {?token}
 	 */
-	return function(s:stream):partialToken|undefined{
+	return function(s:stream):token|undefined{
 		const state0=getStreamState(s);
+		const [line0,char0]=[s.line,s.char];
+		const lay = layout_text_sequence(s);
 		const [Line1,char1]=[s.line,s.char];
 		const var_tok=func(s);
 		if (var_tok==undefined){
@@ -946,9 +937,14 @@ function token_func_gen(func:((s:stream)=>string|undefined),str:tokenType){
 		}
 		const [line2,char2]=[s.line,s.char];
 		return {
+			layout:lay,
 			functor:var_tok,
 			range:{
 				start:{line:Line1,character:char1},
+				end:{line:line2,character:char2}
+			},
+			fullRange:{
+				start:{line:line0,character:char0},
 				end:{line:line2,character:char2}
 			},
 			kind:str
