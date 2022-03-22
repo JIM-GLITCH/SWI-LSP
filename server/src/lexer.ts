@@ -1,8 +1,7 @@
 
 import fs = require("fs");
 import { Range, uinteger } from 'vscode-languageserver';
-export {read_tokens, InputStream,token,stream,tokenType,debug};
-
+export {read_tokens, InputStream,token,stream,tokenType,debug,read_token_list};
 /**
  * test
  * 
@@ -49,6 +48,7 @@ interface token extends partialToken {
 	 */
 }
 
+
 function InputStream(input: string): stream {
 	return {
 		text: input,
@@ -56,6 +56,13 @@ function InputStream(input: string): stream {
 		char: 0,
 		pos: 0,
 	};
+}
+function read_token_list(stream: stream) {
+	if (eos(stream)){
+		return undefined;
+	}
+	const tokens: token[] = token_list(stream);
+	return tokens;
 }
 function read_tokens(stream: stream) {
 	if (eos(stream)){
@@ -888,6 +895,7 @@ function bracketed_comment(s: stream) {
 	])(s);
 }
 function bracketed_comment_char(s:stream){
+	try {
 	const str = s.text.slice(s.pos,s.pos+2);
 	if (str=="*/"){
 		return undefined;
@@ -895,6 +903,11 @@ function bracketed_comment_char(s:stream){
 	const char =str[0];
 	streamConsume(s,char);
 	return char;
+		
+	} catch (error) {
+		console.log(s.line,s.char);
+	}
+
 }
 const bracketed_comment_cont= char_list_gen(bracketed_comment_char);
 function single_line_comment_cont(s: stream): string {
