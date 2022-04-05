@@ -1,6 +1,5 @@
 # SWI Prolog LSP
 - [x] Outline
-- [x] Diagnostics（bug）
-- [x] support user defined operator 
-- [ ] ???
+- [x] Diagnostics (Bug. You can choose to turn off by setting `"swi-lsp.sendDiagnostics":"false"`)
+- [ ] ??? 
 

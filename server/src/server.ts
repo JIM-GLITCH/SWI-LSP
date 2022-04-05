@@ -15,7 +15,9 @@ import {
 	ClauseNode
 } from './astNode';
 import { getSymbols } from './getSymbols';
-import { parseText } from './parser';
+import { parseText ,
+	// parseText2
+} from './parser';
 
 export { localDiagnostics };
 /**
@@ -35,7 +37,7 @@ const connection = createConnection(ProposedFeatures.all);
 // Create a simple text document manager.
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
-let hasConfigurationCapability = false;
+let hasConfigurationCapability = true;
 let hasWorkspaceFolderCapability = false;
 let hasDiagnosticRelatedInformationCapability = false;
 
@@ -44,9 +46,9 @@ connection.onInitialize((params: InitializeParams) => {
 
 	// Does the client support the `workspace/configuration` request?
 	// If not, we fall back using global settings.
-	hasConfigurationCapability = !!(
-		capabilities.workspace && !!capabilities.workspace.configuration
-	);
+	// hasConfigurationCapability = !!(
+	// 	capabilities.workspace && !!capabilities.workspace.configuration
+	// );
 	hasWorkspaceFolderCapability = !!(
 		capabilities.workspace && !!capabilities.workspace.workspaceFolders
 	);
@@ -91,13 +93,17 @@ connection.onInitialized(() => {
 
 // The example settings
 interface ExampleSettings {
+	sendDiagnostics: string;
 	maxNumberOfProblems: number;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings: ExampleSettings = { maxNumberOfProblems: 1000 };
+const defaultSettings = { 
+	maxNumberOfProblems: 1000 ,
+	sendDiagnostics : "true",
+};
 let globalSettings: ExampleSettings = defaultSettings;
 
 // Cache the settings of all open documents
@@ -114,7 +120,7 @@ connection.onDidChangeConfiguration(change => {
 	}
 
 	// Revalidate all open text documents
-	documents.all().forEach(validateTextDocument);
+	// documents.all().forEach(validateTextDocument);
 });
 
 function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
@@ -125,7 +131,7 @@ function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
 	if (!result) {
 		result = connection.workspace.getConfiguration({
 			scopeUri: resource,
-			section: 'languageServerExample'
+			section: 'swi-lsp',
 		});
 		documentSettings.set(resource, result);
 	}
@@ -188,7 +194,11 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// }
 	fileAstMap.set( textDocument.uri,parseText(text));
 	// Send the computed diagnostics to VSCode.
-	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:localDiagnostics });
+	if(settings.sendDiagnostics=="true"){
+		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:localDiagnostics })
+	}else{//settings.sendDiagnostics=="false"
+		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:[] })
+	};
 	
 }
 
@@ -221,6 +231,7 @@ const sleep=(ms:number)=>{
     return new Promise(resolve=>setTimeout(resolve,ms));
 };
 connection.onDocumentSymbol(async(_params)=>{
+	// _params.textDocument.version
 	const file= _params.textDocument.uri;
 	let AST;
 	while (!(AST=fileAstMap.get(file))){

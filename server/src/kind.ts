@@ -33,5 +33,6 @@ const enum Kind {
 	PostfixOpArgNode,
 	PrefixOpArgNode,
 	ClauseNode,
-	IntegerNode
+	IntegerNode,
+	quasi_quoted_string_token
 }

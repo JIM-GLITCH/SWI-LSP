@@ -1,15 +1,17 @@
 /**
  * 这个文件 参考 read.pl (dec-10 prolog)
  */
-
+// import  lexerPeg = require("./lexerPeg");
 import fs = require("fs")
 import { integer, Range } from 'vscode-languageserver'
-import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopNode, ListNode, NegativeNode, PostfixOpArgNode, PostfixopNode, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode } from './astNode'
+import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopNode, ListNode, NegativeNode, PostfixOpArgNode, PostfixopNode, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode } from './astNode'
 import { read_tokens, token, InputStream, stream, tokenType } from "./lexer"
 import { current_op, op } from './op_table'
 import { pushError } from './pushDiagnostic'
 import { Flag } from "./context_flags"
-export { parseText }
+export { parseText ,
+	// parseText2
+}
 type opType = "fy" | "fx" | "xfy" | "xfx" | "yfx" | "yf" | "xf"
 
 function debug()
@@ -29,7 +31,17 @@ function debug()
 		console.log(Answer)
 	}
 }
-
+// function parseText2(text:string) {
+// 	const tokensList:token[][]=lexerPeg.parse(text);
+// 	const clauses:ClauseNode[] = [];
+// 	tokensList.map((tokens)=>{
+// 		const Answer = readClause(tokens)
+// 		if (Answer !== undefined)
+// 			clauses.push(Answer);
+// 		// postParse(Answer)
+// 	})
+// 	return clauses;
+// }
 function parseText(text: string)
 {
 	const clauses = []
@@ -44,7 +56,7 @@ function parseText(text: string)
 		const Answer = readClause(tokens)
 		if (Answer !== undefined)
 			clauses.push(Answer)
-		postParse(Answer)
+		// postParse(Answer)
 	}
 	return clauses
 }
@@ -80,7 +92,7 @@ function readClause(tokens: token[])
 	const flag3 = all_read(LeftOver)
 	if (flag3 == false)
 		// pusherror
-		undefined
+		undefined;
 	return new ClauseNode(Term, tokenList.lastToken)
 }
 // %   all_read(+Tokens)
@@ -108,15 +120,15 @@ function expect(tokenlist: token, Wantedtoken: WantedToken): [false] | [true, to
 	{
 		if (Wantedtoken.layout != tkNode.layout)
 		{
-			pushError(tkNode.range, `${tkNode.functor} or operator expected`)
+			pushError(tkNode.range, `${tkNode.text} or operator expected`)
 			return [false]
 		}
 	}
 	if (Wantedtoken.token)
 	{
-		if (Wantedtoken.token != tkNode.functor)
+		if (Wantedtoken.token != tkNode.text)
 		{
-			pushError(tkNode.range, `${tkNode.functor} or operator expected`)
+			pushError(tkNode.range, `${tkNode.text} or operator expected`)
 			return [false]
 		}
 	}
@@ -124,7 +136,7 @@ function expect(tokenlist: token, Wantedtoken: WantedToken): [false] | [true, to
 	{
 		if (Wantedtoken.type != tkNode.kind)
 		{
-			pushError(tkNode.range, `${tkNode.functor} or operator expected`)
+			pushError(tkNode.range, `${tkNode.text} or operator expected`)
 			return [false]
 		}
 	}
@@ -215,7 +227,7 @@ function getToken(tokenlist: token, Wantedtoken: WantedToken): [false] | [true, 
 	}
 	if (Wantedtoken.token !== undefined)
 	{
-		if (Wantedtoken.token != tkNode.functor)
+		if (Wantedtoken.token != tkNode.text)
 			return [false]
 	}
 	if (Wantedtoken.type !== undefined)
@@ -261,11 +273,11 @@ function read_var(head: token, tail: token | undefined, Precedence: number, cont
 }
 function read_name(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false]
 {
-	if (head.functor == "-" && tail?.kind == Kind.integer)
+	if (head.text == "-" && tail?.kind == Kind.integer)
 	{
 		return exprtl0(tail.next, new NegativeNode({ sign: head, integer: tail }), Precedence, context_flags)
 	}
-	if (tail?.functor == "(" && tail.layout == "")
+	if (tail?.text == "(" && tail.layout == "")
 	{
 		const [flag1, Arg1, S2] = read(tail.next, 999, Flag.COMMA_TERMINATES)
 		if (flag1 == false)
@@ -275,7 +287,7 @@ function read_name(head: token, tail: token | undefined, Precedence: number, con
 			return [false]
 		return exprtl0(S3, new FunctorNode(head, Arg1, RestArgs), Precedence, context_flags)
 	}
-	const [flag1, Prec, Right] = prefixop(head.functor)
+	const [flag1, Prec, Right] = prefixop(head.text)
 	if (flag1 == true)
 	{
 		return after_prefix_op(head, Prec, Right, tail, Precedence, context_flags)
@@ -290,7 +302,7 @@ function read_integer(head: token, tail: token | undefined, Precedence: number, 
 function read_open_list(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false]
 {
 	// TODO Flag
-	if (tail?.functor == "]")
+	if (tail?.text == "]")
 		return exprtl0(tail.next, new AtomNode(head, tail), Precedence, context_flags)
 	const [flag1, Arg1, S2] = read(tail, 999, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 	if (flag1 == false)
@@ -315,7 +327,7 @@ function read_open(head: token, tail: token | undefined, Precedence: number, con
 
 function read_open_curly(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false]
 {
-	if (tail?.functor == "}")
+	if (tail?.text == "}")
 		return exprtl0(tail.next, new AtomNode(head, tail), Precedence, context_flags)
 	// BUG ??  context_flags set 0 
 	const [flag1, Term, S2] = read(tail, 1200, 0)
@@ -342,7 +354,7 @@ function read_args(head: token | undefined, context_flags: number): [false] | [t
 {
 	if (head === undefined)
 		return [false]
-	if (head.functor == ",")
+	if (head.text == ",")
 	{
 		const [flag1, Term, S2] = read(head.next, 999, Flag.COMMA_TERMINATES)
 		if (flag1 == false)
@@ -352,7 +364,7 @@ function read_args(head: token | undefined, context_flags: number): [false] | [t
 			return [false]
 		return [true, new ListNode(Term, Rest), S]
 	}
-	if (head.functor == ")")
+	if (head.text == ")")
 	{
 		return [true, new AtomNode(head), head.next]
 	}
@@ -366,7 +378,7 @@ function read_list(head: token | undefined, context_flags: number): [false] | [t
 {
 	if (head === undefined)
 		return [false]
-	if (head.functor == ",")
+	if (head.text == ",")
 	{
 		const [flag, Term, S2] = read(head.next, 999, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 		if (flag == false)
@@ -376,7 +388,7 @@ function read_list(head: token | undefined, context_flags: number): [false] | [t
 			return [false]
 		return [true, new ListNode(Term, Rest), S]
 	}
-	if (head.functor == "|")
+	if (head.text == "|")
 	{
 		const [flag, Rest, S2] = read(head.next, 999, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 		if (flag == false)
@@ -386,7 +398,7 @@ function read_list(head: token | undefined, context_flags: number): [false] | [t
 			return [false]
 		return [true, Rest, S]
 	}
-	if (head.functor == "]")
+	if (head.text == "]")
 	{
 		return [true, new AtomNode(head), head.next]
 	}
@@ -431,10 +443,10 @@ function after_prefix_op(Op: token, Oprec: number, Aprec: number, S0: token | un
 function peepop(head: token | undefined)
 {
 	if (!head) return head
-	if (head.kind == Kind.atom && head.next?.functor === "(" && head.next?.layout === "")
+	if (head.kind == Kind.atom && head.next?.text === "(" && head.next?.layout === "")
 		return head
 	{
-		const [flag1, L, P, R] = infixop(head.functor)
+		const [flag1, L, P, R] = infixop(head.text)
 		if (flag1)
 		{
 			const newhead = new InfixopNode(head, [L, P, R] as [number, number, number])
@@ -442,7 +454,7 @@ function peepop(head: token | undefined)
 		}
 	}
 	{
-		const [flag1, L, P] = postfixop(head.functor)
+		const [flag1, L, P] = postfixop(head.text)
 		if (flag1)
 		{
 			const newhead = new PostfixopNode(head, [L, P] as [number, number])
@@ -465,7 +477,7 @@ function prefix_is_atom(head: token | undefined, P: number)
 		return head.precs[0] >= P
 	if (head instanceof PostfixopNode)
 		return head.precs[0] >= P
-	switch (head.functor)
+	switch (head.text)
 	{
 		case ")":
 			return true
@@ -493,7 +505,7 @@ function exprtl0(head: token | undefined, Term: any, Precedence: number, context
 	if (head.kind == Kind.atom)
 	{
 		{
-			const [flag1, L1, O1, R1, L2, O2] = ambigop(head.functor)
+			const [flag1, L1, O1, R1, L2, O2] = ambigop(head.text)
 			if (flag1)
 			{
 				{
@@ -511,17 +523,17 @@ function exprtl0(head: token | undefined, Term: any, Precedence: number, context
 
 		}
 		{
-			const [flag1, L1, O1, R1] = infixop(head.functor)
+			const [flag1, L1, O1, R1] = infixop(head.text)
 			if (flag1)
 				return exprtl(new InfixopNode(head, [L1, O1, R1]), 0, Term, Precedence, context_flags)
 		}
 		{
-			const [flag1, L2, O2] = postfixop(head.functor)
+			const [flag1, L2, O2] = postfixop(head.text)
 			if (flag1)
 				return exprtl(new PostfixopNode(head, [L2, O2]), 0, Term, Precedence, context_flags)
 		}
 	}
-	if (head.functor == ",")
+	if (head.text == ",")
 	{
 		if (context_flags & Flag.COMMA_TERMINATES)
 		{
@@ -535,7 +547,7 @@ function exprtl0(head: token | undefined, Term: any, Precedence: number, context
 			return [false]
 		}
 	}
-	if (head.functor == "|")
+	if (head.text == "|")
 	{
 		if (context_flags & Flag.BAR_TERMINATES)
 		{
@@ -612,7 +624,7 @@ function exprtl(head: token | undefined, C: number, Term: any, Precedence: numbe
 			return exprtl(S2, O, new PostfixOpArgNode(head, Term), Precedence, context_flags)
 		}
 	}
-	if (head.functor == ",")
+	if (head.text == ",")
 	{
 		// read_list or read_args 遇到 , 直接返回
 		if (context_flags & Flag.COMMA_TERMINATES)
@@ -627,7 +639,7 @@ function exprtl(head: token | undefined, C: number, Term: any, Precedence: numbe
 			return exprtl(S2, 1000, new CommaNode(Term, Next), Precedence, context_flags)
 		}
 	}
-	if (head.functor == "|")
+	if (head.text == "|")
 	{
 		// read_list  遇到 , 直接返回
 		if (context_flags & Flag.BAR_TERMINATES)
@@ -661,14 +673,14 @@ function postParse(Answer: ClauseNode | undefined)
 		return
 	}
 	// 
-	if (term instanceof PrefixOpArgNode && term.functor.functor == ":-")
+	if (term instanceof PrefixOpArgNode && term.functor.text == ":-")
 	{
 		const node = term.arg
-		if (node instanceof FunctorNode && node.functor.functor == "op" && node.arity == 3)
+		if (node instanceof FunctorNode && node.functor.text == "op" && node.arity == 3)
 		{
-			const prec = Number(node.arg1.functor.functor)
-			const type = (node.restArgs as ListNode).left.functor.functor
-			const name = (node.restArgs as ListNode).right.left.functor.functor//Bug here Atom ? token?
+			const prec = Number(node.arg1.functor.text)
+			const type = (node.restArgs as ListNode).left.functor.text
+			const name = (node.restArgs as ListNode).right.left.functor.text//Bug here Atom ? token?
 			op(prec, type, name)
 		}
 	}

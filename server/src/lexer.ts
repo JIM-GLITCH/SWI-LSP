@@ -28,27 +28,42 @@ interface stream {
 	char: uinteger;
 	pos: uinteger;
 }
-
-interface token {
-	next?:token|undefined;
-	/**
-	 * leading spaces and comments
-	 */
-	
-	layout: string;
-	/**
-	 * token string
-	 */
-	functor: string;
+/**
+ *  start and end offset from zero 
+ */
+interface FromTo{
+	/**  offset from zero */
+	start:number;
+	/**  offset from zero */
+	end:number
+}
+interface partialToken {
 	/**
 	 * token range
 	 */
 	range: Range;
+	// fromTo:FromTo;
+	kind: Kind;
+}
+
+
+interface token extends partialToken{
+	/**
+	 * leading spaces and comments
+	 */
+	layout: string;
+	/**
+	 * token string
+	 */
+	text: string;
 	/**
 	 * layout and token range
 	 */
+	next?:token|undefined;
+	/**
+	 * @deprecated maybe no need to keep this info
+	 */
 	fullRange: Range
-	kind: Kind;
 
 }
 
@@ -115,13 +130,14 @@ function token_list(s: stream) {
 	return tokens;
 }
 function atoken(stream: stream): token | undefined {
-	return tok_or_gen([
+	return matchAny([
 		atom,
 		variable,
 		float,
 		integer,
 		double_quoted_list, 
-		back_quoted_string, 
+		back_quoted_string,
+		quasi_quoted_string,
 		open,
 		close,
 		open_list,
@@ -160,7 +176,6 @@ function atom(s: stream){
 	return token_func_gen(atom_token,Kind.atom)(s);
 }
 
-
 const end = token_func_gen(end_token,Kind.end);
 
 const variable = token_func_gen(variable_token,Kind.variable);
@@ -180,17 +195,44 @@ const open_list = token_func_gen(open_list_token,Kind.open_list);
 const close_list= token_func_gen(close_list_token,Kind.close_list);
 
 const open_curly = token_func_gen(open_curly_token,Kind.open_curly);
+
 const close_curly = token_func_gen(close_curly_token,Kind.close_curly);
+
 const ht_sep =token_func_gen(ht_sep_token,Kind.ht_sep);
+
 const comma =token_func_gen(comma_token,Kind.comma);
+
 const  back_quoted_string= token_func_gen(back_quoted_string_token,Kind.back_quoted_string);
 
+const quasi_quoted_string= token_func_gen(quasi_quoted_string_token,Kind.quasi_quoted_string_token);
 
-/**
- * 
- * @param f 
- */
-function tok_or_gen(f:((s: stream) => any)[]):any{
+/*
+
+                            tokens 
+
+*/
+
+function quasi_quoted_string_token(s:stream) {
+	return matchAll([
+		(s)=>getWantedStr(s,"{|"),
+		zero_or_more((s)=>getCharNotStr(s,"|}")),
+		(s)=>getWantedStr(s,"|}"),
+	])(s)
+}
+
+
+function getCharNotStr(s:stream,str:string) {
+	const length = str.length;
+	const start = s.pos;
+	const lookedStr = s.text.slice(start,start+length);
+	if (lookedStr != str){
+		const c = lookedStr[0];
+		streamConsume(s,c);
+		return c;
+	}
+	return undefined
+}
+function matchAny(f:((s: stream) => any)[]):any{
 	return function(s:stream){
 		const state0=getStreamState(s);
 		for (let index = 0; index < f.length; index++) {
@@ -207,7 +249,7 @@ function tok_or_gen(f:((s: stream) => any)[]):any{
 function semicolon_token(s:stream){
 	return getWantedChar(s,";");
 }
-const atom_token=tok_or_gen([
+const atom_token=matchAny([
 		letter_digit_token,
 		graphic_token,
 		quoted_token,
@@ -235,7 +277,7 @@ function streamConsume(s:stream,str:string):undefined{
 }
 
 function letter_digit_token(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		small_letter_char,
 		alphanumeric_char_list
 	])(s);
@@ -262,9 +304,9 @@ function getWantedChar(s:stream,char_expected:string){
 }
 function graphic_token(s:stream){
 	const state0 = getStreamState(s);
-	const c1 = tok_and_gen([
+	const c1 = matchAll([
 		(s:stream)=>getWantedChar(s,"."),
-		tok_or_gen([
+		matchAny([
 			layout_char,
 			(s:stream)=>getWantedChar(s,"%"),
 			(s:stream)=>getWantedChar(s,""), //getWantedChar(s,"") means end-of-file
@@ -274,13 +316,13 @@ function graphic_token(s:stream){
 		setStreamState(s,state0);
 		return undefined;
 	}
-	return tok_and_gen([
+	return matchAll([
 		graphic_token_char,
 		graphic_token_chars
 	])(s);
 
 }
-const graphic_char = tok_or_gen([
+const graphic_char = matchAny([
 	(s:stream)=>getWantedChar(s,"#"),
 	(s:stream)=>getWantedChar(s,"$"),
 	(s:stream)=>getWantedChar(s,"&"),
@@ -298,22 +340,22 @@ const graphic_char = tok_or_gen([
 	(s:stream)=>getWantedChar(s,"^"),
 	(s:stream)=>getWantedChar(s,"~")
 ]);
-const graphic_token_char = tok_or_gen([
+const graphic_token_char = matchAny([
 	graphic_char,
 	backslash_char
 ]);
 
-const  graphic_token_chars =char_list_gen(graphic_token_char);
+const  graphic_token_chars =zero_or_more(graphic_token_char);
 
 function quoted_token(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		single_quote_char,
 		single_quoted_items,
 		single_quote_char
 	])(s);
 }
 // 6.5.5 Meta characters
-const meta_char = tok_or_gen([
+const meta_char = matchAny([
 	backslash_char,
 	single_quote_char,
 	double_quote_char,
@@ -331,7 +373,7 @@ function double_quote_char(s:stream){
 function back_quote_char(s:stream){
 	return getWantedChar(s,"`");
 }
-const solo_char=tok_or_gen([
+const solo_char=matchAny([
 	cut_char,
 	open_char,
 	close_char,
@@ -344,7 +386,7 @@ const solo_char=tok_or_gen([
 	head_tail_separator_char,
 	end_line_comment_char,
 ]);
-const non_quote_char=tok_or_gen([
+const non_quote_char=matchAny([
 	meta_escape_sequence,
 	control_escape_sequence,
 	octal_escape_sequence,
@@ -355,19 +397,19 @@ const non_quote_char=tok_or_gen([
 	space_char
 ]);
 function control_escape_sequence(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		backslash_char,
 		symbolic_control_char
 	])(s);
 }
-const single_quoted_item=tok_or_gen([
+const single_quoted_item=matchAny([
 	continuation_escape_sequence,
 	single_quoted_character
 ]);
-const single_quoted_items = char_list_gen(single_quoted_item);
+const single_quoted_items = zero_or_more(single_quoted_item);
 
 function continuation_escape_sequence(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		backslash_char,
 		new_line_char
 	])(s);
@@ -379,24 +421,24 @@ function cut_token(s:stream){
 
 //  6.4.2.1 Quoted characters
 function single_quoted_character(s:stream){
-	return tok_or_gen([
+	return matchAny([
 		non_quote_char,
-		tok_and_gen([single_quote_char,single_quote_char]),
+		matchAll([single_quote_char,single_quote_char]),
 		double_quote_char,
 		back_quote_char
 	])(s);
 }
 function double_quoted_character(s:stream){
-	return tok_or_gen([
-		tok_and_gen([double_quote_char,double_quote_char]),
+	return matchAny([
+		matchAll([double_quote_char,double_quote_char]),
 		single_quote_char,
 		non_quote_char,
 		back_quote_char
 	])(s);
 }
 function back_quoted_character(s:stream){
-	return tok_or_gen([
-		tok_and_gen([back_quote_char,back_quote_char]),
+	return matchAny([
+		matchAll([back_quote_char,back_quote_char]),
 		single_quote_char,
 		non_quote_char,
 		double_quote_char,
@@ -404,14 +446,14 @@ function back_quoted_character(s:stream){
 }
 
 function meta_escape_sequence(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		backslash_char,
 		meta_char
 	])(s);
 }
 
 
-const symbolic_control_char=tok_or_gen([
+const symbolic_control_char=matchAny([
 	symbolic_alert_char,
 	symbolic_backspace_char,
 	symbolic_carriage_return_char,
@@ -443,21 +485,21 @@ function symbolic_vertical_tab_char(s:stream){
 }
 
 function octal_escape_sequence(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		backslash_char,
 		octal_digit_char,
 		octal_digit_char_list,
-		tok_or_gen([
+		matchAny([
 			backslash_char,
 			(_)=>{return "";}
 		])
 	])(s);
 }
 function octal_digit_char_list(s:stream){
-	return char_list_gen(octal_digit_char)(s);
+	return zero_or_more(octal_digit_char)(s);
 }
 function hexcadecimal_escape_sequence(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		backslash_char,
 		symbolic_hexadecimal_char,
 		hexadecimal_digit_char,
@@ -474,7 +516,7 @@ function symbolic_hexadecimal_char(s:stream){
 // 6.4.3 Variables
 
 function variable_token(s:stream){
-	return tok_or_gen([named_variable,anonymous_variable])(s);
+	return matchAny([named_variable,anonymous_variable])(s);
 }
 
 function anonymous_variable(s:stream){
@@ -482,13 +524,13 @@ function anonymous_variable(s:stream){
 }
 
 function named_variable(s:stream){
-	return tok_or_gen([
-		tok_and_gen([
+	return matchAny([
+		matchAll([
 			variable_indicator_char,
 			alphanumeric_char,
 			alphanumeric_char_list
 		]),
-		tok_and_gen([
+		matchAll([
 			capital_letter_char,
 			alphanumeric_char_list
 		])
@@ -498,7 +540,7 @@ function variable_indicator_char(s:stream){
 	return getWantedChar(s,"_");
 }
 //  6.4.4 Integer numbers
-function tok_and_gen(f:((s:stream)=>string|undefined)[]){
+function matchAll(f:((s:stream)=>string|undefined)[]){
 	return function(s:stream){
 	const state0=getStreamState(s);
 	let c0 = "";
@@ -514,7 +556,7 @@ function tok_and_gen(f:((s:stream)=>string|undefined)[]){
 };
 }
 function integer_token(s:stream){ 
-	return tok_or_gen([
+	return matchAny([
 		character_code_constant,
 		binary_constant,
 		octal_constant,
@@ -523,8 +565,8 @@ function integer_token(s:stream){
 	])(s);
 }
 
-const decimal_digit_char_list=char_list_gen(decimal_digit_char);
-const integer_constant=tok_and_gen([
+const decimal_digit_char_list=zero_or_more(decimal_digit_char);
+const integer_constant=matchAll([
 	decimal_digit_char,
 	decimal_digit_char_list,
 ]);
@@ -537,19 +579,19 @@ function decimal_digit_char(s:stream){
 	setStreamState(s,state0);
 	return undefined;	
 }
-const character_code_constant=tok_and_gen([
+const character_code_constant=matchAll([
 	(s:stream)=>getWantedChar(s,"0"),
 	single_quote_char,
-	tok_or_gen([single_quoted_character,single_quote_char])
+	matchAny([single_quoted_character,single_quote_char])
 ]);
 function binary_constant(s:stream){ 
-	return tok_and_gen([
+	return matchAll([
 		binary_constant_indicator,
 		binary_digit_char,
 		binary_digit_char_list
 	])(s);
 }
-const binary_digit_char_list =char_list_gen(binary_digit_char);
+const binary_digit_char_list =zero_or_more(binary_digit_char);
 function binary_digit_char(s:stream){
 	const state0=getStreamState(s);
 	const c = getchar(s);
@@ -566,7 +608,7 @@ function binary_constant_indicator(s:stream){
 	return undefined;
 }
 
-const octal_constant=tok_and_gen([
+const octal_constant=matchAll([
 	octal_constant_indicator,
 	octal_digit_char,
 	octal_digit_char_list
@@ -587,8 +629,8 @@ function octal_constant_indicator(s:stream){
 	return undefined;
 }
 
-const hexadecimal_digit_char_list=char_list_gen(hexadecimal_digit_char);
-const hexadecimal_constant = tok_and_gen([
+const hexadecimal_digit_char_list=zero_or_more(hexadecimal_digit_char);
+const hexadecimal_constant = matchAll([
 	hexadecimal_constant_indicator,
 	hexadecimal_digit_char,
 	hexadecimal_digit_char_list
@@ -619,41 +661,41 @@ function underscore_char(s:stream):string | undefined | undefined{
 function decimal_point_char(s:stream){
 	return getWantedChar(s,".");
 }
-const fraction=tok_and_gen([
+const fraction=matchAll([
 	decimal_point_char,
 	decimal_digit_char,
 	decimal_digit_char_list
 ]);
-const sign = tok_or_gen([
+const sign = matchAny([
 	(s:stream)=>getWantedChar(s,"+"),
 	(s:stream)=>getWantedChar(s,"-"),
 
 ]);
-const exponent_char=tok_or_gen([
+const exponent_char=matchAny([
 	(s:stream)=>getWantedChar(s,"e"),
 	(s:stream)=>getWantedChar(s,"E"),
 ]);
-const exponent =tok_and_gen([
+const exponent =matchAll([
 	exponent_char,
-	tok_or_gen([sign,(s:stream)=>{return "";}]),
+	matchAny([sign,(s:stream)=>{return "";}]),
 	integer_constant
 ]);
 function float_token(s:stream) {
-	return tok_and_gen([
+	return matchAll([
 	integer_constant,
 	fraction,
-	tok_or_gen([exponent,(s:stream)=>{return "";}])
+	matchAny([exponent,(s:stream)=>{return "";}])
 ])(s);
 }
 
 // 6.4.6 Double quoted lists
-const double_quoted_item =tok_or_gen([
+const double_quoted_item =matchAny([
 	double_quoted_character,
 	continuation_escape_sequence
 ]);
-const double_quoted_item_list=char_list_gen(double_quoted_item);
+const double_quoted_item_list=zero_or_more(double_quoted_item);
 function double_quoted_list_token(s:stream) {
-	return tok_and_gen([
+	return matchAll([
 	double_quote_char,
 	double_quoted_item_list,
 	double_quote_char
@@ -663,11 +705,11 @@ function double_quoted_list_token(s:stream) {
 
 // 6.4.7 back quoted strings
 
-const back_quoted_item=tok_or_gen([
+const back_quoted_item=matchAny([
 	back_quoted_character,
 	continuation_escape_sequence
 ]);
-const back_quoted_item_list=char_list_gen(back_quoted_item);
+const back_quoted_item_list=zero_or_more(back_quoted_item);
 
 // 6.4.8 Other tokens
 function open_token(s:stream){
@@ -738,7 +780,7 @@ function end_line_comment_char(s:stream){
 }
 
 // 6.5.4 Layout characters
-const layout_char = tok_or_gen([
+const layout_char = matchAny([
 	space_char,
 	horizontal_tab_char,
 	new_line_char
@@ -762,7 +804,7 @@ function horizontal_tab_char(s: stream) {
 	return undefined;
 }
 function new_line_char(s: stream) {
-	return tok_or_gen([
+	return matchAny([
 		(s)=>getWantedStr(s,"\r\n"),
 		(s)=>getWantedChar(s,"\r"),
 		(s)=>getWantedChar(s,"\n")
@@ -786,39 +828,41 @@ function small_letter_char(s:stream):string | undefined | undefined{
 	}
 	return undefined;
 }
-function char_list_gen(f:(s: stream) => string | undefined){
+function zero_or_more(fun:(s: stream) => string | undefined){
 	const tmp = function (s:stream):string{
-		const state0=getStreamState(s);
-		const char1 = f(s);
-		if (char1 == undefined) {
-			setStreamState(s,state0);
-			return "";
+		let str = ""
+		for(;;){
+            const state0 = getStreamState(s);
+            const char1 = fun(s);
+            if (char1 == undefined) {
+                setStreamState(s, state0);
+                return str;
+            }
+            str +=char1; 
 		}
-		const char2 = tmp(s);
-		return char1 +char2;
-	};
+	}
 	return tmp;
 }
 
 
 function alphanumeric_char_list(s:stream):string{
-	return char_list_gen(alphanumeric_char)(s);
+	return zero_or_more(alphanumeric_char)(s);
 }
 function alphanumeric_char(s:stream){
-	return tok_or_gen([
+	return matchAny([
 		alpha_char,
 		decimal_digit_char,
 	])(s);
 }
 function alpha_char(s:stream){
-	return tok_or_gen([
+	return matchAny([
 		underscore_char,
 		letter_char
 	])(s);
 }
 
 function letter_char(s:stream){
-	return tok_or_gen([
+	return matchAny([
 		capital_letter_char,
 		small_letter_char
 	])(s);
@@ -833,16 +877,16 @@ function capital_letter_char(s:stream){
 }
 
 function layout_text_sequence(s: stream): string {
-	return char_list_gen(layout_text)(s);
+	return zero_or_more(layout_text)(s);
 }
 function layout_text(s: stream) {
-	return tok_or_gen([
+	return matchAny([
 		layout_char,
 		comment
 	])(s);
 }
 function comment(s: stream): string | undefined | undefined {
-	return tok_or_gen([
+	return matchAny([
 		single_line_comment,
 		bracketed_comment
 	])(s);
@@ -877,7 +921,7 @@ function single_line_comment(s: stream) {
 }
 
 function bracketed_comment(s: stream) {
-	return tok_and_gen([
+	return matchAll([
 		(s)=>getWantedStr(s,"/*"),
 		bracketed_comment_cont,
 		(s)=>getWantedStr(s,"*/"),
@@ -898,7 +942,7 @@ function bracketed_comment_char(s:stream){
 	}
 
 }
-const bracketed_comment_cont= char_list_gen(bracketed_comment_char);
+const bracketed_comment_cont= zero_or_more(bracketed_comment_char);
 function single_line_comment_cont(s: stream): string {
 	let str;
 	str = new_line_char(s); if (str != undefined) return str ?? "";
@@ -915,7 +959,7 @@ function single_line_comment_cont(s: stream): string {
 
 
 function back_quoted_string_token(s:stream){
-	return tok_and_gen([
+	return matchAll([
 		back_quote_char,
 		back_quoted_item_list,
 		back_quote_char
@@ -938,7 +982,7 @@ function token_func_gen(func:((s:stream)=>string|undefined),str:tokenType){
 		const [line2,char2]=[s.line,s.char];
 		return {
 			layout:lay,
-			functor:var_tok,
+			text:var_tok,
 			range:{
 				start:{line:Line1,character:char1},
 				end:{line:line2,character:char2}
@@ -954,5 +998,3 @@ function token_func_gen(func:((s:stream)=>string|undefined),str:tokenType){
 	
 }
 // debug();
-function d(a:any){return undefined;}
-

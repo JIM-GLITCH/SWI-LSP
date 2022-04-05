@@ -11,21 +11,21 @@ async function getSymbols(localClauses:ClauseNode[]): Promise<DocumentSymbol[]> 
 			undefined;
 		}
 		else if (term instanceof InfixOpArgNode){
-				if(term.functor.functor==":-" 
-				|| term.functor.functor=="-->"){
+				if(term.functor.text==":-" 
+				|| term.functor.text=="-->"){
 					const pred = term.left;
 					let name="";
 					if (pred instanceof AtomNode){
-						if(term.functor.functor==":-" )
-							name =pred.functor.functor;
+						if(term.functor.text==":-" )
+							name =pred.functor.text;
 						else
-							name =pred.functor.functor+"//0"; 
+							name =pred.functor.text+"//0"; 
 					}
 					else if(pred instanceof  FunctorNode){
-						name = pred.functor.functor+trans(term.functor.functor) +pred.arity;
+						name = pred.functor.text+trans(term.functor.text) +pred.arity;
 					}
-					else if (pred instanceof InfixOpArgNode && pred.functor.functor==":"){
-						const moduleName = pred.left.functor.functor;
+					else if (pred instanceof InfixOpArgNode && pred.functor.text==":"){
+						const moduleName = pred.left.functor.text;
 						const predName = getFunctorName(pred.right);
 						name = moduleName+":"+predName;
 					}
@@ -39,7 +39,7 @@ async function getSymbols(localClauses:ClauseNode[]): Promise<DocumentSymbol[]> 
 			} 
 		}
 		else if (term instanceof PrefixOpArgNode){
-			if(term.functor.functor==":-" ){
+			if(term.functor.text==":-" ){
 				const Arg = term.arg;
 				if (Arg instanceof AtomNode){
 					undefined;
@@ -47,7 +47,7 @@ async function getSymbols(localClauses:ClauseNode[]): Promise<DocumentSymbol[]> 
 				else if ((Arg instanceof FunctorNode) || 
 				( Arg instanceof PrefixOpArgNode)){
 					const functor = Arg.functor;
-					const str = functor.functor;
+					const str = functor.text;
 					symbols.push({
 						name:str,
 						kind:SymbolKind.Event,
@@ -60,7 +60,7 @@ async function getSymbols(localClauses:ClauseNode[]): Promise<DocumentSymbol[]> 
 		}
 		else if (term instanceof AtomNode){
 			symbols.push({
-				name:term.functor.functor,
+				name:term.functor.text,
 				kind:SymbolKind.Function,
 				range:term.range,
 				selectionRange:term.range,
@@ -68,7 +68,7 @@ async function getSymbols(localClauses:ClauseNode[]): Promise<DocumentSymbol[]> 
 		}
 		else if (term instanceof FunctorNode){
 			symbols.push({
-				name:term.functor.functor+'/'+term.arity,
+				name:term.functor.text+'/'+term.arity,
 				kind:SymbolKind.Function,
 				range:term.range,
 				selectionRange:term.range,

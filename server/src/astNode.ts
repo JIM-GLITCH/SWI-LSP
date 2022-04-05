@@ -20,7 +20,8 @@ export {
 	PostfixOpArgNode,
 	PrefixOpArgNode,
 	ClauseNode,
-	IntegerNode
+	IntegerNode,
+	KeyValueNode
 };
 function combineRange(r1: Range, r2: Range): Range {
 	return { start: r1.start, end: r2.end };
@@ -165,7 +166,7 @@ class CurlyNode extends Node {
 class opNode implements token {
 	// token interface
 	layout: string;
-	functor: string;
+	text: string;
 	range: Range;
 	fullRange: Range;
 	kind: tokenType;
@@ -173,7 +174,7 @@ class opNode implements token {
 	constructor(atom: token) {
 		// token interface
 		this.layout = atom.layout;
-		this.functor = atom.functor;
+		this.text = atom.text;
 		this.range = atom.range;
 		this.fullRange = atom.fullRange;
 		this.kind = atom.kind;
@@ -277,5 +278,14 @@ class ClauseNode extends Node{
 		super(Term,endToken);
 		this.term = Term;
 		this.end = endToken;
+	}
+}
+class KeyValueNode extends Node{
+	Key: any
+	Value: token
+	constructor(Key:any,Value:token){
+		super(Key,Value);
+		this.Key = Key;
+		this.Value = Value;
 	}
 }

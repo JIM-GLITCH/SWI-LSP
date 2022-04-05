@@ -4,9 +4,9 @@ export{getFunctorName};
 function getFunctorName(a:{kind:Kind}){
 	switch (a.kind) {
 		case Kind.AtomNode:
-			return (a as AtomNode).functor.functor;
+			return (a as AtomNode).functor.text;
 		case Kind.FunctorNode:
-			return (a as FunctorNode).functor.functor;
+			return (a as FunctorNode).functor.text;
 		
 		default:
 			return " ";

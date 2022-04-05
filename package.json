@@ -3,7 +3,7 @@
 	"description": "A language server for SWI-Prolog",
 	"author": "lilr",
 	"license": "MIT",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/JIM-GLITCH/SWI-LSP"
@@ -25,13 +25,13 @@
 			"type": "object",
 			"title": "Example configuration",
 			"properties": {
-				"languageServerExample.maxNumberOfProblems": {
+				"swi-lsp.maxNumberOfProblems": {
 					"scope": "resource",
 					"type": "number",
 					"default": 1000,
 					"description": "Controls the maximum number of problems produced by the server."
 				},
-				"languageServerExample.trace.server": {
+				"swi-lsp.trace.server": {
 					"scope": "window",
 					"type": "string",
 					"enum": [
@@ -41,6 +41,16 @@
 					],
 					"default": "off",
 					"description": "Traces the communication between VS Code and the language server."
+				},
+				"swi-lsp.sendDiagnostics": {
+					"scope": "window",
+					"type": "string",
+					"enum": [
+						"false",
+						"true"
+					],
+					"default": "true",
+					"description": "Send diagnostics or not."
 				}
 			}
 		}
@@ -62,7 +72,5 @@
 		"mocha": "^9.2.1",
 		"typescript": "^4.6.2"
 	},
-	"dependencies": {
-		"antlr4": "^4.9.3"
-	}
+	"dependencies": {}
 }

@@ -2,8 +2,8 @@
 	"editor.insertSpaces": false,
 	"typescript.tsc.autoDetect": "off",
 	"typescript.preferences.quoteStyle": "single",
-	"typescript.format.placeOpenBraceOnNewLineForControlBlocks": true,
-	"typescript.format.placeOpenBraceOnNewLineForFunctions": true,
+	"typescript.format.placeOpenBraceOnNewLineForControlBlocks": false,
+	"typescript.format.placeOpenBraceOnNewLineForFunctions": false,
 	"editor.codeActionsOnSave": {
 		"source.fixAll.eslint": true
 	}
