@@ -3,6 +3,12 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Node.js - Debug Current File",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceRoot}/test/test.js"
+		  },
+		{
 			"type": "extensionHost",
 			"request": "launch",
 			"name": "Launch Client",

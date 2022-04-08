@@ -3,6 +3,7 @@ import { SSL_OP_NO_TLSv1_2 } from 'constants';
 import { Range } from 'vscode-languageserver';
 import { token, tokenType } from './lexer';
 export {
+	Node,
 	VarNode, 
 	NegativeNode, 
 	FunctorNode, 
@@ -73,7 +74,7 @@ class FunctorNode extends Node {
 	arg1:ArgNode;
 	arity:number;
 	restArgs: AtomNode | ListNode;
-	constructor(functor: token,Arg1: any,RestArgs:ListNode|AtomNode) {
+	constructor(functor: token,Arg1: ArgNode,RestArgs:ListNode|AtomNode) {
 		super(functor,RestArgs);
 		this.functor = functor;
 		if (RestArgs instanceof ListNode){
@@ -84,6 +85,21 @@ class FunctorNode extends Node {
 		}
 		this.arg1 =Arg1;
 		this.restArgs = RestArgs;
+	}
+	getArgs(){
+		const args =[this.arg1];
+		let p=this.restArgs;
+		for(;;){
+			if (p instanceof ListNode){
+				args.push(p.left);
+				p=p.right;
+				continue;
+			}
+			else if(p instanceof AtomNode){
+				break;
+			}
+		}
+		return args;
 	}
 }
 class IntegerNode extends Node{
@@ -136,6 +152,21 @@ class ListNode extends Node {
 		}else{
 			this.length = 1+right.length;
 		}
+	}
+	getArgs(){
+		const args =[this.left];
+		let p=this.right;
+		for(;;){
+			if (p instanceof ListNode){
+				args.push(p.left);
+				p=p.right;
+				continue;
+			}
+			else if(p instanceof AtomNode){
+				break;
+			}
+		}
+		return args;
 	}
 }
 

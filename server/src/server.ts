@@ -15,7 +15,7 @@ import {
 	ClauseNode
 } from './astNode';
 import { getSymbols } from './getSymbols';
-import { parseText ,
+import { Parser ,
 	// parseText2
 } from './parser';
 
@@ -192,7 +192,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// 	}
 	// 	localDiagnostics.push(diagnostic);
 	// }
-	fileAstMap.set( textDocument.uri,parseText(text));
+	fileAstMap.set( textDocument.uri,(new Parser()).parseText(text));
 	// Send the computed diagnostics to VSCode.
 	if(settings.sendDiagnostics=="true"){
 		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:localDiagnostics })
