@@ -61,7 +61,7 @@ interface token extends partialToken{
 	 */
 	next?:token|undefined;
 	/**
-	 * @deprecated maybe no need to keep this info
+	 *  maybe no need to keep this info
 	 */
 	fullRange: Range
 

@@ -14,16 +14,17 @@ import {
 import {
 	ClauseNode
 } from './astNode';
+import { FileState } from './fileState'
 import { getSymbols } from './getSymbols';
 import { Parser ,
 	// parseText2
 } from './parser';
 
 export { localDiagnostics };
-/**
- * fileAstMap 用来根据DocumentUri 来确定Ast
- */
+/** fileAstMap 用来根据DocumentUri 来确定Ast*/
 const fileAstMap:Map<DocumentUri,ClauseNode[]>=new Map();
+/** fileStateMap 用来根据DocumentUri 来确定fileState*/
+const fileStateMap:Map<DocumentUri,FileState>=new Map();
 /**
  * 用来收集 diagnostics ( error, warning, hint, information ) 然后再发出去
  *  */  
@@ -152,12 +153,13 @@ documents.onDidChangeContent(change => {
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// In this simple example we get the settings for every validate run.
 	const settings = await getDocumentSettings(textDocument.uri);
-
+	
 	// The validator creates diagnostics for all uppercase words length 2 and more
 	const text = textDocument.getText();
 	// const pattern = /\b[A-Z]{2,}\b/g;
 	// let m: RegExpExecArray | null;
-
+	const fileUri = textDocument.uri;
+	const fileState =new FileState(fileUri)
 	// const problems = 0;
 	// 每次重新验证文件 把 localDiagnostics 设置为空列表
 	localDiagnostics = [];
@@ -192,7 +194,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// 	}
 	// 	localDiagnostics.push(diagnostic);
 	// }
-	fileAstMap.set( textDocument.uri,(new Parser()).parseText(text));
+	fileAstMap.set( textDocument.uri,(new Parser(fileState)).parseText(text));
 	// Send the computed diagnostics to VSCode.
 	if(settings.sendDiagnostics=="true"){
 		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:localDiagnostics })
