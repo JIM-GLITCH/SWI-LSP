@@ -1,33 +1,29 @@
 /* --------------------------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
+ * ------------------------------------------------------------------------------------------- */
 import {
 	DocumentUri,
 	TextDocument
-} from 'vscode-languageserver-textdocument';
+} from 'vscode-languageserver-textdocument'
 import {
 	CompletionItem,
-	CompletionItemKind, createConnection, Diagnostic,
-	DiagnosticSeverity, DidChangeConfigurationNotification, InitializeParams, InitializeResult, ProposedFeatures, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
-} from 'vscode-languageserver/node';
-import {
-	ClauseNode
-} from './astNode';
+	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, ProposedFeatures, SymbolKind, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
+} from 'vscode-languageserver/node'
+import { AST } from './AST'
+import { Node } from './astNode'
 import { FileState } from './fileState'
-import { getSymbols } from './getSymbols';
-import { Parser ,
-	// parseText2
-} from './parser';
+import { Parser } from './parser'
 
-export { localDiagnostics };
+export { localDiagnostics }
+
 /** fileAstMap 用来根据DocumentUri 来确定Ast*/
-const fileAstMap:Map<DocumentUri,ClauseNode[]>=new Map();
+const fileAstMap:Map<DocumentUri,AST> =new Map();
+
 /** fileStateMap 用来根据DocumentUri 来确定fileState*/
-const fileStateMap:Map<DocumentUri,FileState>=new Map();
-/**
- * 用来收集 diagnostics ( error, warning, hint, information ) 然后再发出去
- *  */  
+const fileStateMap:Map<DocumentUri,FileState> =new Map();
+
+/** 用来收集 diagnostics ( error, warning, hint, information ) 然后再发出去 */  
 let localDiagnostics:Diagnostic[] = [];
 
 
@@ -66,8 +62,9 @@ connection.onInitialize((params: InitializeParams) => {
 			completionProvider: {
 				resolveProvider: true
 			},
-			documentSymbolProvider:true
-			
+			documentSymbolProvider:true,
+			definitionProvider:true,
+			hoverProvider:true
 		}
 	};
 	if (hasWorkspaceFolderCapability) {
@@ -153,15 +150,11 @@ documents.onDidChangeContent(change => {
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// In this simple example we get the settings for every validate run.
 	const settings = await getDocumentSettings(textDocument.uri);
-	
-	// The validator creates diagnostics for all uppercase words length 2 and more
+
 	const text = textDocument.getText();
-	// const pattern = /\b[A-Z]{2,}\b/g;
-	// let m: RegExpExecArray | null;
-	const fileUri = textDocument.uri;
-	const fileState =new FileState(fileUri)
-	// const problems = 0;
-	// 每次重新验证文件 把 localDiagnostics 设置为空列表
+	const textDocumentUri = textDocument.uri;
+	const fileState = new FileState(textDocument) 
+
 	localDiagnostics = [];
 	// while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
 	// 	problems++;
@@ -194,7 +187,10 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// 	}
 	// 	localDiagnostics.push(diagnostic);
 	// }
-	fileAstMap.set( textDocument.uri,(new Parser(fileState)).parseText(text));
+	const clauseNodeList = (new Parser(fileState)).parseTextWithState(text);
+	const ast = new AST(clauseNodeList);
+	fileAstMap.set( textDocumentUri,ast);
+	fileStateMap.set(textDocumentUri,fileState);
 	// Send the computed diagnostics to VSCode.
 	if(settings.sendDiagnostics=="true"){
 		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics:localDiagnostics })
@@ -235,11 +231,21 @@ const sleep=(ms:number)=>{
 connection.onDocumentSymbol(async(_params)=>{
 	// _params.textDocument.version
 	const file= _params.textDocument.uri;
-	let AST;
-	while (!(AST=fileAstMap.get(file))){
+	let state;
+	while (!(state=fileStateMap.get(file))){
 		await sleep(100);
 	}
-	return getSymbols(AST);
+	const Symbols: DocumentSymbol[]=[];
+	state.graph.definitionsMap.forEach((nodeSet,name)=>{
+		const range = (nodeSet?.values().next().value as Node).range
+		Symbols.push({
+			name:name,
+			kind:SymbolKind.Function,
+			range:range,
+			selectionRange:range,
+		})
+	})
+	return Symbols;
 });
 
 // This handler resolves additional information for the item selected in
@@ -256,6 +262,33 @@ connection.onCompletionResolve(
 		return item;
 	}
 );
+
+
+connection.onDefinition(async (_params)=>{
+	const position = _params.position;
+	const textDocumentUri = _params.textDocument.uri;
+	let ast:AST|undefined; 
+	while (!(ast=fileAstMap.get(textDocumentUri))){
+		await sleep(100);
+	}
+	const Node = ast.search(position);
+	return [];
+})
+connection.onHover(async (_params)=>{
+	const pos =_params.position
+	const uri = _params.textDocument.uri
+	let ast
+	while (!(ast=fileAstMap.get(uri))){
+		await sleep(100);
+	}
+	const node = ast.search(pos)
+
+	return {
+		contents:node?.functor!.text??" ",
+		range:node?.range
+	}
+})
+
 // connection.onDidOpenTextDocument(async(_params)=>{
 // 	validateTextDocument(_params);
 // });

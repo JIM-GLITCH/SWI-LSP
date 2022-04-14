@@ -1,5 +1,6 @@
 import { integer } from 'vscode-languageserver';
-import { ClauseNode, FunctorNode, PrefixOpArgNode,Node, ListNode } from './astNode'
+import { ClauseNode, FunctorNode, PrefixOpArgNode,Node, ListNode, IntegerNode, AtomNode } from './astNode'
+import { pushError } from './pushDiagnostic'
 export { OpTable};
 
 class OpTable{
@@ -48,10 +49,7 @@ class OpTable{
 				// TODO pushHint atom {opName} is not a operator 
 			}
 		}
-			//  如果Procedence <0 || opPrecedence >1200 报错
-		else if (opPrecedence < 0 || opPrecedence > 1200) {
-			// TODO pushError Domain error: `operator_priority' expected, found {opPrecedence}
-		}
+
 		else if ( !isNaN(opPrecedence)){
 			const opNameMap = this.userdefined_op_table.get(opName);
 			const prec = this.userdefined_op_table.get(opName)?.get(opType);
@@ -80,25 +78,64 @@ class OpTable{
 			this.tryModuleNode(argNode);
 		}
 	}
-
-	tryOpThreeNode(node:Node) {
+	tryNode(node:Node){
 		if(this.opThreeNode(node)){
-			const args = (node as FunctorNode).getArgs().map(x=>x.functor.text);
-			if(!(args.length ==3))
+			const argNodes = (node as FunctorNode).getArgs()
+			if((argNodes.length !=3))
 				return;
+			if(argNodes[0].kind != Kind.IntegerNode || argNodes[1].kind != Kind.AtomNode || argNodes[2].kind !=Kind.AtomNode){
+				return;
+			}
+			const args = argNodes.map(x=>(x as IntegerNode|AtomNode).functor.text);
 			const prec = Number(args[0]);
 			// 如果是单引号 括起来的 去掉单引号
 			const type = this.trimSingleQuote(args[1]);
 			const name = this.trimSingleQuote(args[2]);
 			if(isNaN(prec))
-				// TODO pushError 
-				return;
+				return pushError(argNodes[0].range,`Domain error: 'operator_priority' expected, found ${prec}}`)
+			//  如果Procedence <0 || opPrecedence >1200 报错
+			if (prec < 0 || prec > 1200) {
+				return pushError(argNodes[0].range,`Domain error: 'operator_priority' expected, found ${prec}}`)
+			}
 				// optype 符合规范
 			if (!opTypeSet.has(type)){
-				// TODO pushError 
+				return pushError(argNodes[1].range,`Domain error: 'operator_specifier' expected, found ${type}`)
+			}
+			return this.op(prec,type,name);
+		}else if (this.moduleTwoThreeNode(node)){
+			const moduleNode =  node as FunctorNode;
+			const publicListNode = (moduleNode.arg as any).right.left;
+			if (! (publicListNode instanceof ListNode))
+				return;
+			const publicList = publicListNode.getArgs();
+			return publicList.forEach(x=>this.tryOpThreeNode(x));
+		}
+	}
+	/**`op(opPrec,opKind,opName)` modify op table */
+	tryOpThreeNode(node:Node) {
+		if(this.opThreeNode(node)){
+			const argNodes = (node as FunctorNode).getArgs()
+			if((argNodes.length !=3))
+				return;
+			if(argNodes[0].kind != Kind.IntegerNode || argNodes[1].kind != Kind.AtomNode || argNodes[2].kind !=Kind.AtomNode){
 				return;
 			}
-			this.op(prec,type,name);
+			const args = argNodes.map(x=>(x as IntegerNode|AtomNode).functor.text);
+			const prec = Number(args[0]);
+			// 如果是单引号 括起来的 去掉单引号
+			const type = this.trimSingleQuote(args[1]);
+			const name = this.trimSingleQuote(args[2]);
+			if(isNaN(prec))
+				return pushError(argNodes[0].range,`Domain error: 'operator_priority' expected, found ${prec}}`)
+			//  如果Procedence <0 || opPrecedence >1200 报错
+			if (prec < 0 || prec > 1200) {
+				return pushError(argNodes[0].range,`Domain error: 'operator_priority' expected, found ${prec}}`)
+			}
+				// optype 符合规范
+			if (!opTypeSet.has(type)){
+				return pushError(argNodes[1].range,`Domain error: 'operator_specifier' expected, found ${type}`)
+			}
+			return this.op(prec,type,name);
 		}
 	}
 		
@@ -107,7 +144,7 @@ class OpTable{
 		if (!this.moduleTwoThreeNode(node))
 			return;
 		const moduleNode =  node as FunctorNode;
-		const publicListNode = (moduleNode.restArgs as ListNode).left;
+		const publicListNode = ((moduleNode.arg as ListNode).right as ListNode).left;
 		if (! (publicListNode instanceof ListNode))
 			return;
 		const publicList = publicListNode.getArgs();

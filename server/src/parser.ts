@@ -3,7 +3,7 @@
  */
 // import  lexerPeg = require("./lexerPeg");
 import fs = require("fs")
-import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopNode, ListNode, NegativeNode, PostfixOpArgNode, PostfixopNode, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode, CK, Semantic } from './astNode'
+import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode, Semantic } from './astNode'
 import { read_tokens, token, InputStream, stream, tokenType } from "./lexer"
 import { OpTable } from './op_table'
 import { pushError } from './pushDiagnostic'
@@ -17,7 +17,7 @@ function debug() {
 	const fileString = fs.readFileSync("./server/src/test/3.pl").toString()
 	const stream = InputStream(fileString)
 	for (; ;) {
-		if (stream.pos >= stream.text.length)
+		if (stream.offset >= stream.text.length)
 			break
 		const tokens = read_tokens(stream)
 		if (tokens === undefined)
@@ -48,6 +48,7 @@ class Parser {
 		if(fileState){
 			this.optable = fileState.opTable
 			this.graph = fileState.graph;
+			this.fileState = fileState;
 		}else{
 			this.optable = new OpTable()
 			this.graph = new Graph()
@@ -65,7 +66,7 @@ class Parser {
 		const clauses: ClauseNode[] = []
 		const stream = InputStream(text)
 		for (; ;) {
-			if (stream.pos >= stream.text.length)
+			if (stream.offset >= stream.text.length)
 				break
 			const tokens = read_tokens(stream)
 			if (tokens === undefined)
@@ -73,8 +74,8 @@ class Parser {
 			const Answer = this.readClause(tokens)
 			if (Answer !== undefined) {
 				clauses.push(Answer)
-				this.optable.tryChangeOpTable(Answer)
-				Answer.walk(Semantic.Rule,this.fileState as FileState);
+				// this.optable.tryChangeOpTable(Answer)
+				Answer.walk(Semantic.TopLevel,this.fileState as FileState);
 			}
 			// postParse(Answer)
 
@@ -86,7 +87,7 @@ class Parser {
 		const clauses: ClauseNode[] = []
 		const stream = InputStream(text)
 		for (; ;) {
-			if (stream.pos >= stream.text.length)
+			if (stream.offset >= stream.text.length)
 				break
 			const tokens = read_tokens(stream)
 			if (tokens === undefined)
@@ -305,7 +306,7 @@ class Parser {
 			const [flag2, RestArgs, S3] = this.read_args(S2, context_flags)
 			if (flag2 == false)
 				return [false]
-			return this.exprtl0(S3, new FunctorNode(head, Arg1, RestArgs), Precedence, context_flags)
+			return this.exprtl0(S3, new FunctorNode(head, new ListNode(Arg1, RestArgs)), Precedence, context_flags)
 		}
 		const [flag1, Prec, Right] = this.prefixop(head.text)
 		if (flag1 == true) {
@@ -450,14 +451,14 @@ class Parser {
 		{
 			const [flag1, L, P, R] = this.infixop(head.text)
 			if (flag1) {
-				const newhead = new InfixopNode(head, [L, P, R] as [number, number, number])
+				const newhead = new InfixopToken(head, [L, P, R] as [number, number, number])
 				return newhead
 			}
 		}
 		{
 			const [flag1, L, P] = this.postfixop(head.text)
 			if (flag1) {
-				const newhead = new PostfixopNode(head, [L, P] as [number, number])
+				const newhead = new PostfixopToken(head, [L, P] as [number, number])
 				return newhead
 			}
 		}
@@ -492,9 +493,9 @@ class Parser {
 			default:
 				break
 		}
-		if (head instanceof InfixopNode)
+		if (head instanceof InfixopToken)
 			return head.precs[0] >= P;
-		if (head instanceof PostfixopNode)
+		if (head instanceof PostfixopToken)
 			return head.precs[0] >= P;
 		
 		return false
@@ -511,12 +512,12 @@ class Parser {
 				const [flag1, L1, O1, R1, L2, O2] = this.ambigop(head.text)
 				if (flag1) {
 					{
-						const [flag2, Answer, S] = this.exprtl(new InfixopNode(head, [L1, O1, R1] as any), 0, Term, Precedence, context_flags)
+						const [flag2, Answer, S] = this.exprtl(new InfixopToken(head, [L1, O1, R1] as any), 0, Term, Precedence, context_flags)
 						if (flag2)
 							return [true, Answer, S]
 					}
 					{
-						const [flag2, Answer, S] = this.exprtl(new PostfixopNode(head, [L2, O2] as any), 0, Term, Precedence, context_flags)
+						const [flag2, Answer, S] = this.exprtl(new PostfixopToken(head, [L2, O2] as any), 0, Term, Precedence, context_flags)
 						if (flag2)
 							return [true, Answer, S]
 					}
@@ -527,12 +528,12 @@ class Parser {
 			{
 				const [flag1, L1, O1, R1] = this.infixop(head.text)
 				if (flag1)
-					return this.exprtl(new InfixopNode(head, [L1, O1, R1]), 0, Term, Precedence, context_flags)
+					return this.exprtl(new InfixopToken(head, [L1, O1, R1]), 0, Term, Precedence, context_flags)
 			}
 			{
 				const [flag1, L2, O2] = this.postfixop(head.text)
 				if (flag1)
-					return this.exprtl(new PostfixopNode(head, [L2, O2]), 0, Term, Precedence, context_flags)
+					return this.exprtl(new PostfixopToken(head, [L2, O2]), 0, Term, Precedence, context_flags)
 			}
 		}
 		if (head.text == ",") {
@@ -553,7 +554,7 @@ class Parser {
 			if (Precedence >= 1100) {
 				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
 				if (flag1)
-					return this.exprtl(S2, 1000, new SemicolonNode(Term, Next), Precedence, context_flags)
+					return this.exprtl(S2, 1000, new SemicolonNode(Term, head, Next), Precedence, context_flags)
 				return [false]
 			}
 		}
@@ -594,7 +595,7 @@ class Parser {
 		[false] | [true, any, token?] {
 		if (head === undefined)
 			return [true, Term, head]
-		if (head instanceof InfixopNode) {
+		if (head instanceof InfixopToken) {
 			const [L, O, R] = head.precs
 			// BUG [fixed] example: "[Error => Recover]"  
 			// error: " `,` `|` or `]` expected in list "
@@ -605,7 +606,7 @@ class Parser {
 				return [false]
 			}
 		}
-		if (head instanceof PostfixopNode) {
+		if (head instanceof PostfixopToken) {
 			const [L, O] = head.precs
 			if (Precedence >= O && C <= L) {
 				const S2 = this.peepop(head.next);
@@ -633,7 +634,7 @@ class Parser {
 				const [flag1, Next, S2] = this.read(head.next, 1100, context_flags)
 				if (!flag1)
 					return [false]
-				return this.exprtl(S2, 1100, new SemicolonNode(Term, Next), Precedence, context_flags)
+				return this.exprtl(S2, 1100, new SemicolonNode(Term, head,Next), Precedence, context_flags)
 			}
 		}
 		return [true, Term, head]

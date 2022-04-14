@@ -1,5 +1,5 @@
-import { AtomNode, FunctorNode } from './astNode';
-import { token } from './lexer';
+import { AtomNode, FunctorNode } from '../server/src/astNode';
+import { token } from '../server/src/lexer';
 export{getFunctorName};
 function getFunctorName(a:{kind:Kind}){
 	switch (a.kind) {

@@ -26,7 +26,7 @@ interface stream {
 	text: string;
 	line: uinteger;
 	char: uinteger;
-	pos: uinteger;
+	offset: uinteger;
 }
 /**
  *  start and end offset from zero 
@@ -73,7 +73,7 @@ function InputStream(input: string): stream {
 		text: input,
 		line: 0,
 		char: 0,
-		pos: 0,
+		offset: 0,
 	};
 }
 function read_token_list(stream: stream) {
@@ -112,7 +112,7 @@ function end_token(s: stream) {
 
 }
 function eos(s:stream){
-	if (s.text.charAt(s.pos)==""){
+	if (s.text.charAt(s.offset)==""){
 		return true;
 	}
 	return false;
@@ -151,10 +151,10 @@ function atoken(stream: stream): token | undefined {
 
 
 function getStreamState(s: stream): [uinteger, uinteger, uinteger] {
-	return [s.line, s.char, s.pos];
+	return [s.line, s.char, s.offset];
 }
 function setStreamState(s: stream, state: [uinteger, uinteger, uinteger]): undefined {
-	[s.line, s.char, s.pos] = state;
+	[s.line, s.char, s.offset] = state;
 	return undefined;
 }
 
@@ -223,7 +223,7 @@ function quasi_quoted_string_token(s:stream) {
 
 function getCharNotStr(s:stream,str:string) {
 	const length = str.length;
-	const start = s.pos;
+	const start = s.offset;
 	const lookedStr = s.text.slice(start,start+length);
 	if (lookedStr != str){
 		const c = lookedStr[0];
@@ -271,7 +271,7 @@ function streamConsume(s:stream,str:string):undefined{
 		else {
 			s.char += 1;
 		}
-		s.pos += 1;
+		s.offset += 1;
 	}
 	return undefined;
 }
@@ -284,7 +284,7 @@ function letter_digit_token(s:stream){
 }
 
 function getWantedChar(s:stream,char_expected:string){
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if(char !=char_expected){
 		return undefined;
 	}
@@ -299,7 +299,7 @@ function getWantedChar(s:stream,char_expected:string){
 	else {
 		s.char += 1;
 	}
-	s.pos += 1;
+	s.offset += 1;
 	return char;
 }
 function graphic_token(s:stream){
@@ -601,7 +601,7 @@ function binary_digit_char(s:stream){
 	return undefined;	
 }
 function binary_constant_indicator(s:stream){
-	if (s.text.slice(s.pos,s.pos+2)=="0b"){
+	if (s.text.slice(s.offset,s.offset+2)=="0b"){
 		streamConsume(s,"0b");
 		return "0b";
 	}
@@ -622,7 +622,7 @@ function octal_digit_char(s:stream){
 	return undefined;	
 }
 function octal_constant_indicator(s:stream){
-	if (s.text.slice(s.pos,s.pos+2)=="0o"){
+	if (s.text.slice(s.offset,s.offset+2)=="0o"){
 		streamConsume(s,"0o");
 		return "0o";
 	}
@@ -637,7 +637,7 @@ const hexadecimal_constant = matchAll([
 ]);
 
 function hexadecimal_constant_indicator(s:stream){
-	if (s.text.slice(s.pos,s.pos+2)=="0x"){
+	if (s.text.slice(s.offset,s.offset+2)=="0x"){
 		streamConsume(s,"0x");
 		return "0x";
 	}
@@ -786,19 +786,19 @@ const layout_char = matchAny([
 	new_line_char
 ]);
 function space_char(s: stream) {
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if (char == " ") {
 		s.char += 1;
-		s.pos += 1;
+		s.offset += 1;
 		return char;
 	}
 	return undefined;
 }
 function horizontal_tab_char(s: stream) {
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if (char == "\t") {
 		s.char += 1;
-		s.pos += 1;
+		s.offset += 1;
 		return char;
 	}
 	return undefined;
@@ -811,7 +811,7 @@ function new_line_char(s: stream) {
 	])(s);
 }
 function getWantedStr(s:stream,str:string){
-	if (s.text.slice(s.pos,s.pos+str.length)==str){
+	if (s.text.slice(s.offset,s.offset+str.length)==str){
 		streamConsume(s,str);
 		return str;
 	}
@@ -821,7 +821,7 @@ function getWantedStr(s:stream,str:string){
 
 
 function small_letter_char(s:stream):string | undefined | undefined{
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if ("a"<=char && char <="z"){
 		streamConsume(s,char);
 		return char;
@@ -868,7 +868,7 @@ function letter_char(s:stream){
 	])(s);
 }
 function capital_letter_char(s:stream){
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if(char>="A" && char<="Z"){
 		streamConsume(s,char);
 		return char;
@@ -892,7 +892,7 @@ function comment(s: stream): string | undefined | undefined {
 	])(s);
 }
 function getchar(s: stream) {
-	const char = s.text.charAt(s.pos);
+	const char = s.text.charAt(s.offset);
 	if (char == "") {
 		return "";
 	}
@@ -903,7 +903,7 @@ function getchar(s: stream) {
 	else {
 		s.char += 1;
 	}
-	s.pos += 1;
+	s.offset += 1;
 	return char;
 
 
@@ -911,7 +911,7 @@ function getchar(s: stream) {
 
 function single_line_comment(s: stream) {
 	
-	if (s.text[s.pos] != "%") {
+	if (s.text[s.offset] != "%") {
 		return undefined;
 	}
 	const state0 = getStreamState(s);
@@ -929,7 +929,7 @@ function bracketed_comment(s: stream) {
 }
 function bracketed_comment_char(s:stream){
 	try {
-	const str = s.text.slice(s.pos,s.pos+2);
+	const str = s.text.slice(s.offset,s.offset+2);
 	if (str=="*/"){
 		return undefined;
 	}
