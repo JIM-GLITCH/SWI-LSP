@@ -8,7 +8,7 @@ import {
 } from 'vscode-languageserver-textdocument'
 import {
 	CompletionItem,
-	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, ProposedFeatures, SymbolKind, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
+	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, ProposedFeatures, SymbolKind, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
 } from 'vscode-languageserver/node'
 import { AST } from './AST'
 import { Node } from './astNode'
@@ -64,7 +64,8 @@ connection.onInitialize((params: InitializeParams) => {
 			},
 			documentSymbolProvider:true,
 			definitionProvider:true,
-			hoverProvider:true
+			hoverProvider:true,
+			referencesProvider:true
 		}
 	};
 	if (hasWorkspaceFolderCapability) {
@@ -266,13 +267,43 @@ connection.onCompletionResolve(
 
 connection.onDefinition(async (_params)=>{
 	const position = _params.position;
-	const textDocumentUri = _params.textDocument.uri;
+	const uri = _params.textDocument.uri;
 	let ast:AST|undefined; 
-	while (!(ast=fileAstMap.get(textDocumentUri))){
+	while (!(ast=fileAstMap.get(uri))){
 		await sleep(100);
 	}
-	const Node = ast.search(position);
-	return [];
+	const node = ast.search(position);
+	const name = node?.name
+	const state = fileStateMap.get(uri);
+	if (!name)
+		return [];
+	const definitions:LocationLink[] = [];
+	state?.graph.getDefinations(name).forEach((x) =>{definitions.push({
+		originSelectionRange:node.range,
+		targetUri:uri,
+		targetRange:x.range,
+		targetSelectionRange:x.range
+	})})
+	return definitions;
+})
+connection.onReferences(async (_params)=>{
+	const position = _params.position;
+	const uri = _params.textDocument.uri;
+	let ast:AST|undefined; 
+	while (!(ast=fileAstMap.get(uri))){
+		await sleep(100);
+	}
+	const node = ast.search(position);
+	const name = node?.name
+	const state = fileStateMap.get(uri);
+	if (!name)
+		return [];
+	const references:Location[] = [];
+	state?.graph.getReferences(name).forEach((x) =>{references.push({
+		uri:uri,
+		range:x.range
+	})})
+	return references;
 })
 connection.onHover(async (_params)=>{
 	const pos =_params.position
@@ -284,7 +315,7 @@ connection.onHover(async (_params)=>{
 	const node = ast.search(pos)
 
 	return {
-		contents:node?.functor!.text??" ",
+		contents:node?.name??" ",
 		range:node?.range
 	}
 })

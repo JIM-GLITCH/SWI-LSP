@@ -460,7 +460,8 @@ const symbolic_control_char=matchAny([
 	symbolic_form_feed_char,
 	symbolic_horizontal_tab_char,
 	symbolic_new_line_char,
-	symbolic_vertical_tab_char
+	symbolic_vertical_tab_char,
+	(s)=>getWantedChar(s,"e")
 ]);
 function symbolic_alert_char(s:stream){
 	return getWantedChar(s,"a");

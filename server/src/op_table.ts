@@ -104,7 +104,7 @@ class OpTable{
 			return this.op(prec,type,name);
 		}else if (this.moduleTwoThreeNode(node)){
 			const moduleNode =  node as FunctorNode;
-			const publicListNode = (moduleNode.arg as any).right.left;
+			const publicListNode = moduleNode.args._nodes[1];
 			if (! (publicListNode instanceof ListNode))
 				return;
 			const publicList = publicListNode.getArgs();
@@ -144,7 +144,7 @@ class OpTable{
 		if (!this.moduleTwoThreeNode(node))
 			return;
 		const moduleNode =  node as FunctorNode;
-		const publicListNode = ((moduleNode.arg as ListNode).right as ListNode).left;
+		const publicListNode = moduleNode.args._nodes[1];
 		if (! (publicListNode instanceof ListNode))
 			return;
 		const publicList = publicListNode.getArgs();

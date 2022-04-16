@@ -3,7 +3,7 @@
  */
 // import  lexerPeg = require("./lexerPeg");
 import fs = require("fs")
-import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode, Semantic } from './astNode'
+import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode, Semantic, Node } from './astNode'
 import { read_tokens, token, InputStream, stream, tokenType } from "./lexer"
 import { OpTable } from './op_table'
 import { pushError } from './pushDiagnostic'
@@ -12,7 +12,8 @@ import { Graph } from './graph'
 import { FileState } from './fileState'
 export { Parser }
 type opType = "fy" | "fx" | "xfy" | "xfx" | "yfx" | "yf" | "xf"
-
+type commaToken = token;
+type barToken = token;
 function debug() {
 	const fileString = fs.readFileSync("./server/src/test/3.pl").toString()
 	const stream = InputStream(fileString)
@@ -300,13 +301,19 @@ class Parser {
 			return this.exprtl0(tail.next, new NegativeNode({ sign: head, integer: tail }), Precedence, context_flags)
 		}
 		if (tail?.text == "(" && tail.layout == "") {
+			const nodes: Node[] = [];
+			/* get f() */
+			if((tail?.next?.text == ")")){
+				return this.exprtl0(tail.next?.next,new FunctorNode(head,nodes,tail.next),Precedence, context_flags)
+			}
 			const [flag1, Arg1, S2] = this.read(tail.next, 1200, Flag.COMMA_TERMINATES)
 			if (flag1 == false)
 				return [false]
-			const [flag2, RestArgs, S3] = this.read_args(S2, context_flags)
+			nodes.push(Arg1)
+			const [flag2, close] = this.read_args(S2, context_flags,nodes)
 			if (flag2 == false)
 				return [false]
-			return this.exprtl0(S3, new FunctorNode(head, new ListNode(Arg1, RestArgs)), Precedence, context_flags)
+			return this.exprtl0(close?.next, new FunctorNode(head, nodes,close!), Precedence, context_flags)
 		}
 		const [flag1, Prec, Right] = this.prefixop(head.text)
 		if (flag1 == true) {
@@ -325,10 +332,22 @@ class Parser {
 		const [flag1, Arg1, S2] = this.read(tail, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 		if (flag1 == false)
 			return [false]
-		const [flag2, RestArgs, S3] = this.read_list(S2, context_flags)
+		const [flag2,commaOrBarOrCloselist, RestArgs, closelist] = this.read_list(S2, context_flags)
+		       
 		if (flag2 == false)
 			return [false]
-		return this.exprtl0(S3, new ListNode(Arg1, RestArgs), Precedence, context_flags)
+			/* get , term ]*/
+		if (commaOrBarOrCloselist.text == "]"){
+			const closelist = commaOrBarOrCloselist;
+			return this.exprtl0( closelist?.next,new ListNode(Arg1,closelist,RestArgs!),Precedence,context_flags)
+		}
+		if(commaOrBarOrCloselist.text == ","){
+			const comma = commaOrBarOrCloselist;
+			return this.exprtl0( closelist?.next,new ListNode(Arg1,comma,RestArgs!),Precedence,context_flags)
+		}
+		const bar = commaOrBarOrCloselist;
+		/* get | term ]*/
+		return this.exprtl0(closelist?.next, new ListNode(Arg1,bar, RestArgs!), Precedence, context_flags)
 	}
 
 	read_open(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false] {
@@ -361,23 +380,24 @@ class Parser {
 	read_back_quoted_string(head: token, tail: token | undefined, Precedence: number, context_flags: number) {
 		return this.exprtl0(tail, new BackQuotedNode(head), Precedence, context_flags)
 	}
-
+	
 	// %   read_args(+Tokens) -TermList, -LeftOver
 	// %   parses {',' expr(999)} ')' and returns a list of terms.
-	read_args(head: token | undefined, context_flags: number): [false] | [true, any, token?] {
+	read_args(head: token | undefined, context_flags: number,nodes:Node[]): [false] | [true,token?] {
 		if (head === undefined)
 			return [false]
 		if (head.text == ",") {
 			const [flag1, Term, S2] = this.read(head.next, 1200, Flag.COMMA_TERMINATES)
 			if (flag1 == false)
 				return [false]
-			const [flag2, Rest, S] = this.read_args(S2 as token, context_flags)
+			nodes.push(Term)
+			const [flag2, close] = this.read_args(S2 as token, context_flags, nodes)
 			if (flag2 == false)
 				return [false]
-			return [true, new ListNode(Term, Rest), S]
+			return [true, close]
 		}
 		if (head.text == ")") {
-			return [true, new AtomNode(head), head.next]
+			return [true,head]
 		}
 		pushError(head.range, '`,` or `)` expected in arguments')
 		return [false]
@@ -385,17 +405,29 @@ class Parser {
 	// %   read_list(+Tokens)-TermList, -LeftOver
 	// %   parses {',' expr(999)} ['|' expr(999)] ']' and returns a list of terms.
 
-	read_list(head: token | undefined, context_flags: number): [false] | [true, any, token?] {
+	read_list(head: token | undefined, context_flags: number): [false] | [true, commaToken|barToken, ListNode?, token?] {
 		if (head === undefined)
 			return [false]
 		if (head.text == ",") {
 			const [flag, Term, S2] = this.read(head.next, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 			if (flag == false)
 				return [false]
-			const [flag2, Rest, S] = this.read_list(S2 as token, context_flags)
+			const [flag2, commaOrBarOrCloselist,Rest, LastCloselist] = this.read_list(S2 as token, context_flags)
 			if (flag2 == false)
 				return [false]
-			return [true, new ListNode(Term, Rest), S]
+			/* 得到  , Term ]  */
+			if (!Rest){
+				const Closelist = commaOrBarOrCloselist       /*TODO emptyList*/
+				return [true,head,new ListNode(Term,Closelist,new AtomNode(Closelist)),LastCloselist]
+			}
+			/**得到 , Term,Rest ]   */
+			if(commaOrBarOrCloselist.text == ","){
+				const comma = commaOrBarOrCloselist;
+				return [true,head, new ListNode(Term,comma,Rest),LastCloselist]
+			}
+			/**得到 , Term|Rest ]   */
+			const commaOrBar = commaOrBarOrCloselist
+			return [true, head,new ListNode(Term,commaOrBar, Rest), LastCloselist]
 		}
 		if (head.text == "|") {
 			const [flag, Rest, S2] = this.read(head.next, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
@@ -404,10 +436,10 @@ class Parser {
 			const [flag1, S] = this.expect(S2 as token, { text: "]" })
 			if (flag1 == false)
 				return [false]
-			return [true, Rest, S]
+			return [true,head, Rest, S2]
 		}
 		if (head.text == "]") {
-			return [true, new AtomNode(head), head.next]
+			return [true, head,undefined, head]
 		}
 		pushError(head.range, '`,` `|` or `]` expected in list')
 		return [false]
@@ -543,7 +575,7 @@ class Parser {
 			if (Precedence >= 1000) {
 				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
 				if (flag1)
-					return this.exprtl(S2, 1000, new CommaNode(Term, Next), Precedence, context_flags)
+					return this.exprtl(S2, 1000, new CommaNode(Term,head,Next), Precedence, context_flags)
 				return [false]
 			}
 		}
@@ -622,7 +654,7 @@ class Parser {
 				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
 				if (!flag1)
 					return [false]
-				return this.exprtl(S2, 1000, new CommaNode(Term, Next), Precedence, context_flags)
+				return this.exprtl(S2, 1000, new CommaNode(Term, head, Next), Precedence, context_flags)
 			}
 		}
 		if (head.text == "|") {

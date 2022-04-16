@@ -15,10 +15,10 @@ class Graph{
 		this.definitionsMap = new Map();		
 	}
 	getDefinations(name:string){
-		return this.definitionsMap.get(name)
+		return this.definitionsMap.get(name)??[]
 	}
 	getReferences(name:string){
-		return this.referencesMap.get(name)
+		return this.referencesMap.get(name)??[]
 	}
 	addDefinition(name:string,node:Node){
 		const set = this.definitionsMap.get(name);
