@@ -12,3 +12,5 @@
 ![](./gifs/GotoDefinition.gif)
 ## Find References
 ![](./gifs/FindRefrences.gif)
+## Hover
+![](./gifs/Hover.gif)
