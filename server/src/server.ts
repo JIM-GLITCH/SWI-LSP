@@ -4,11 +4,16 @@
  * ------------------------------------------------------------------------------------------- */
 import {
 	DocumentUri,
+	Position,
 	TextDocument
 } from 'vscode-languageserver-textdocument'
 import {
+	CallHierarchyIncomingCall,
+	CallHierarchyIncomingCallsRequest,
+	CallHierarchyItem,
+	CallHierarchyOutgoingCall,
 	CompletionItem,
-	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, ProposedFeatures, SymbolKind, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
+	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, ProposedFeatures, Range, SymbolKind, TextDocumentIdentifier, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
 } from 'vscode-languageserver/node'
 import { AST } from './AST'
 import { Node } from './astNode'
@@ -60,12 +65,16 @@ connection.onInitialize((params: InitializeParams) => {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
 			// Tell the client that this server supports code completion.
 			completionProvider: {
-				resolveProvider: true
+				resolveProvider:true
 			},
 			documentSymbolProvider:true,
 			definitionProvider:true,
 			hoverProvider:true,
-			referencesProvider:true
+			referencesProvider:true,
+			callHierarchyProvider:{
+				
+			},
+			
 		}
 	};
 	if (hasWorkspaceFolderCapability) {
@@ -286,6 +295,8 @@ connection.onDefinition(async (_params)=>{
 	})})
 	return definitions;
 })
+
+
 connection.onReferences(async (_params)=>{
 	const position = _params.position;
 	const uri = _params.textDocument.uri;
@@ -305,6 +316,8 @@ connection.onReferences(async (_params)=>{
 	})})
 	return references;
 })
+
+
 connection.onHover(async (_params)=>{
 	const pos =_params.position
 	const uri = _params.textDocument.uri
@@ -320,6 +333,108 @@ connection.onHover(async (_params)=>{
 	}
 })
 
+
+connection.onRequest("textDocument/prepareCallHierarchy",async (_params:{position:Position,textDocument:TextDocumentIdentifier}):Promise<CallHierarchyItem[]> =>{
+	const pos:Position = _params.position;
+	const uri = _params.textDocument.uri;
+	let ast;
+	while (!(ast=fileAstMap.get(uri))){
+		await sleep(100);
+	}
+	const node = ast.search(pos)
+	const name = node?.name
+	if (! name)
+		return [];
+	// const items:CallHierarchyItem[] =[];    
+	// const state = fileStateMap.get(uri);
+	// const callerNameMap =state?.graph.getIncomingCalls(name)
+	// if(callerNameMap){
+	// 	callerNameMap.forEach((nodeSet,callerName)=>{
+	// 		if(!nodeSet)
+	// 			return ;
+	// 		items.push({
+	// 			name:callerName,
+	// 			kind:SymbolKind.Function,
+	// 			uri:uri,
+	// 			range
+	// 		})
+	// 	})
+	// }
+
+	return [{
+		name:node.name,
+		kind:SymbolKind.Function,
+		uri:uri,
+		range:node.range,
+		selectionRange:node.range,
+	}]
+})
+
+
+connection.onRequest("callHierarchy/incomingCalls",(_params:any)=>{
+	const item = _params.item;
+	if (!item)
+		return [];
+	const uri = item.uri
+	const name = item.name
+
+	const items:CallHierarchyIncomingCall[] =[];    
+	const state = fileStateMap.get(uri);
+	const callerNameMap =state?.graph.getIncomingCalls(name)
+	if(callerNameMap){
+		callerNameMap.forEach((nodeSet,callerName)=>{
+			if(!nodeSet)
+				return ;
+			const range = state?.graph.getDefinations(callerName).values().next().value.range
+			const fromRanges: Range[] =[]
+			nodeSet.forEach(x=>fromRanges.push(x.range))
+			items.push({
+				from:{
+					name:callerName,
+					kind:SymbolKind.Function,
+					uri,
+					range:range,
+					selectionRange:range
+				},
+				fromRanges:fromRanges
+			})
+		})
+	}
+	return items
+})
+
+
+connection.onRequest("callHierarchy/outgoingCalls",(_params:any)=>{
+	const item = _params.item;
+	if (!item)
+		return [];
+	const uri = item.uri
+	const name = item.name
+
+	const items:CallHierarchyOutgoingCall[] =[];    
+	const state = fileStateMap.get(uri);
+	const calledNameMap =state?.graph.getOutgoingCalls(name)
+	if(calledNameMap){
+		calledNameMap.forEach((nodeSet,calledName)=>{
+			if(!nodeSet)
+				return ;
+			const fromRanges: Range[] =[]
+			nodeSet.forEach(x=>fromRanges.push(x.range))
+			const range = fromRanges[0]
+			items.push({
+				to:{
+					name:calledName,
+					kind:SymbolKind.Function,
+					uri,
+					range:range,
+					selectionRange:range
+				},
+				fromRanges:fromRanges
+			})
+		})
+	}
+	return items
+})
 // connection.onDidOpenTextDocument(async(_params)=>{
 // 	validateTextDocument(_params);
 // });

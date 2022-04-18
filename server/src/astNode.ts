@@ -44,8 +44,12 @@ const enum Semantic {
 	Arg,
 	RuleEval
 }
+interface Info{
+	callerName?:string
+
+}
 class Node {
-	walk(level: number, state: FileState) { };
+	walk(level: number, state: FileState,info:Info) { };
 	range!: Range
 	fullRange!: Range
 	kind!: Kind
@@ -104,6 +108,7 @@ class NegativeNode extends Node {
 	}
 
 }
+
 class FunctorNode extends Node {
 	kind = Kind.FunctorNode;
 	functor: token
@@ -123,50 +128,54 @@ class FunctorNode extends Node {
 	getArgs() {
 		return this.args._nodes
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel: {
 				/* a(xxx). */
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addDefinition(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleHead: {
 				/* a(xxx) :- xxx. */
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addDefinition(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				info.callerName = this.name
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleBody: {
 				/* xxx :- a(xxx). */
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addReference(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				state.graph.addCall(this.name,info.callerName,this)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.DCGHead: {
 				/* a(xxx) --> xxx. */
 				this.name = this.functor.text + "/" + (this.arity + 2)
+				info.callerName = this.name
 				state.graph.addDefinition(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.DCGBody: {
 				/*xxx --> a(xxx). */
 				this.name = this.functor.text + "/" + (this.arity + 2)
 				state.graph.addReference(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				state.graph.addCall(this.name,info.callerName,this)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleEval: {
 				/*:- a(xxx). */
 				state.opTable.tryNode(this)
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addReference(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.Arg: {
 				/**xxx(a) */
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addReference(this.name, this)
-				return this.args?.walk(Semantic.Arg,state)
+				return this.args?.walk(Semantic.Arg,state,info)
 			}
 			default:
 				break
@@ -187,9 +196,7 @@ class IntegerNode extends Node {
 		return checkNodeRange(pos, this)
 	}
 }
-const enum INFO {
-	definition
-}
+
 class AtomNode extends Node {
 	kind = Kind.AtomNode;
 	functor: token
@@ -198,7 +205,7 @@ class AtomNode extends Node {
 		this.functor = head
 		this.name = trimSingleQuote(this.functor.text);
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel: {
 				/* a.  addDefinition */
@@ -206,6 +213,7 @@ class AtomNode extends Node {
 			}
 			case Semantic.RuleHead: {
 				/*  a :- xxx.   addDefinition */
+				info.callerName = this.name
 				return state.graph.addDefinition(this.name, this)
 			}
 			case Semantic.RuleBody: {
@@ -215,6 +223,7 @@ class AtomNode extends Node {
 			case Semantic.DCGHead: {
 				/* a -> xxx. addDefinition */
 				this.name += "/2"
+				info.callerName = this.name
 				return state.graph.addDefinition(this.name, this)
 			}
 			case Semantic.DCGBody: {
@@ -289,10 +298,10 @@ class ListNode extends Node {
 		}
 		return args
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		/* only Sematic.Arg */
-		this.left.walk(Semantic.Arg,state)
-		return this.right?.walk(Semantic.Arg,state)	
+		this.left.walk(Semantic.Arg,state,info)
+		return this.right?.walk(Semantic.Arg,state,info)	
 	}
 	search(pos: Position): Node | undefined {
 		return checkNodeRange(pos,this,this.left,this.right)
@@ -316,6 +325,7 @@ class CurlyNode extends Node {
 	// closeCurly: token;
 	functor:token
 	arg: ArgNode
+	name = "{}/1"
 	constructor(openCurly: token, arg: any, closeCurly: token) {
 		super(openCurly, closeCurly)
 		// this.openCurly = ts[0];
@@ -323,40 +333,42 @@ class CurlyNode extends Node {
 		this.arg = arg
 		this.functor = openCurly
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 
 		switch (level) {
 			case Semantic.TopLevel: {
 				/**{xxx}. */
 				state.graph.addDefinition("{}/1", this)
-				return this.arg.walk(Semantic.Arg,state)
+				return this.arg.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleHead: {
 				/**{xxx}:-xxx. */
 				state.graph.addDefinition("{}/1", this)
-				return this.arg.walk(Semantic.Arg,state)
+				info.callerName = this.name
+				return this.arg.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleBody: {
 				/**xxx:-{xxx} */
 				state.graph.addReference("{}/1", this)
-				return this.arg.walk(Semantic.Arg,state)
+				return this.arg.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.DCGHead: {
 				/**{xxx}-->xxx. */
+				info.callerName = this.name
 				return pushError(this.range, "No permission to define dcg_nonterminal `{xxx}'")
 			}
 			case Semantic.DCGBody: {
 				/**xxx-->{xxx} */
-				return this.arg.walk(Semantic.RuleBody, state)
+				return this.arg.walk(Semantic.RuleBody, state,info)
 			}
 			case Semantic.RuleEval: {
 				/** :- {xxx} */
 				state.graph.addReference("{}/1", this)
-				return this.arg.walk(Semantic.Arg,state)
+				return this.arg.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.Arg: {
 				state.graph.addReference("{}/1", this)
-				return this.arg.walk(Semantic.Arg,state)
+				return this.arg.walk(Semantic.Arg,state,info)
 			}
 			default:
 				break
@@ -422,65 +434,69 @@ class InfixOpArgNode extends Node {
 		this.left = Term
 		this.right = Other
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel: {
 				if (this.functor.text === ":-") {
 					/** xxx :- xxx. */
-					this.left.walk(Semantic.RuleHead, state)
-					return this.right.walk(Semantic.RuleBody, state)
+					this.left.walk(Semantic.RuleHead, state,info)
+					return this.right.walk(Semantic.RuleBody, state,info)
 				}
 				else if (this.functor.text === "-->") {
 					/**xxx --> xxx. */
-					this.left.walk(Semantic.DCGHead, state)
-					return this.right.walk(Semantic.DCGBody, state)
+					this.left.walk(Semantic.DCGHead, state,info)
+					return this.right.walk(Semantic.DCGBody, state, info)
 				}
 				/**xxx a xxx. */
  				this.name = this.functor.text + "/2"
 				state.graph.addDefinition(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleHead: {
 				/**xxx a xxx :- xxx. */
 				this.name = this.functor.text + "/2"
+				info.callerName = this.name
 				state.graph.addDefinition(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleBody: {
 				/** xxx :- xxx a xxx. */
 				this.name = this.functor.text + "/2"
 				state.graph.addReference(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				state.graph.addCall(this.name,info.callerName,this)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.DCGHead: {
 				/**xxx a xxx --> xxx. */
 				this.name = this.functor.text + "/4"
+				info.callerName = this.name
 				state.graph.addDefinition(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.DCGBody: {
 				/**xxx --> xxx a xxx. */
 				this.name = this.functor.text + "/4"
 				state.graph.addReference(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				state.graph.addCall(this.name,info.callerName,this)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.RuleEval: {
 				/**:- xxx a xxx. */
 				this.name = this.functor.text + "/2"
 				state.graph.addReference(this.name, this)
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			case Semantic.Arg: {
 				this.name = this.functor.text + "/2"
 				state.graph.addReference(this.name, this) 
-				this.left.walk(Semantic.Arg,state)
-				return this.right.walk(Semantic.Arg,state)
+				this.left.walk(Semantic.Arg,state,info)
+				return this.right.walk(Semantic.Arg,state,info)
 			}
 			default:
 				break
@@ -504,7 +520,7 @@ class CommaNode extends Node {
 		this.right = Next
 		this.functor = commaToken
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel: {
 				/**xxx , xxx. */
@@ -516,29 +532,29 @@ class CommaNode extends Node {
 			}
 			case Semantic.RuleBody: {
 				/**xxx:- xxx, xxx. */
-				this.left.walk(Semantic.RuleBody, state)
-				return this.right.walk(Semantic.RuleBody, state)
+				this.left.walk(Semantic.RuleBody, state,info)
+				return this.right.walk(Semantic.RuleBody, state,info)
 			}
 			case Semantic.DCGHead: {
 				/**xxx,xxx --> xxx. */
-				this.left.walk(Semantic.DCGHead, state)
-				return this.right.walk(Semantic.DCGBody, state)
+				this.left.walk(Semantic.DCGHead, state,info)
+				return this.right.walk(Semantic.DCGBody, state,info)
 
 			}
 			case Semantic.DCGBody: {
 				/**xxx --> xxx,xxx. */
-				this.left.walk(Semantic.DCGBody, state)
-				return this.right.walk(Semantic.DCGBody, state)
+				this.left.walk(Semantic.DCGBody, state,info)
+				return this.right.walk(Semantic.DCGBody, state,info)
 			}
 			case Semantic.RuleEval: {
 				/**:- xxx,xxx. */
-				this.left.walk(Semantic.RuleEval, state)
-				return this.right.walk(Semantic.RuleEval, state)
+				this.left.walk(Semantic.RuleEval, state,info)
+				return this.right.walk(Semantic.RuleEval, state,info)
 
 			}
 			case Semantic.Arg: {
-				this.left.walk(Semantic.Arg, state)
-				return this.right.walk(Semantic.Arg, state)
+				this.left.walk(Semantic.Arg, state,info)
+				return this.right.walk(Semantic.Arg, state,info)
 			}
 			default:
 				break
@@ -555,6 +571,7 @@ class SemicolonNode extends Node {
 	left: ArgNode
 	functor: token
 	right: ArgNode
+	name = ";/2"
 	constructor(Term: any, functor: token, Next: any) {
 		super(Term, Next)
 		// this.semicolon = tks[0];
@@ -562,7 +579,7 @@ class SemicolonNode extends Node {
 		this.left = Term
 		this.right = Next
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel: {
 				return pushError(this.range, "No permission to modify static procedure `(;)/2'")
@@ -571,19 +588,19 @@ class SemicolonNode extends Node {
 				return pushError(this.range, "No permission to modify static procedure `(;)/2'")
 			}
 			case Semantic.RuleBody: {
-				this.left.walk(Semantic.RuleBody, state)
-				return this.right.walk(Semantic.RuleBody, state)
+				this.left.walk(Semantic.RuleBody, state,info)
+				return this.right.walk(Semantic.RuleBody, state,info)
 			}
 			case Semantic.DCGHead: {
 				pushError(this.range, "No permission to define dcg_nonterminal `Semicolon'")
 			}
 			case Semantic.DCGBody: {
-				this.left.walk(Semantic.DCGBody, state)
-				return this.right.walk(Semantic.DCGBody, state)
+				this.left.walk(Semantic.DCGBody, state,info)
+				return this.right.walk(Semantic.DCGBody, state,info)
 			}
 			case Semantic.RuleEval: {
-				this.left.walk(Semantic.RuleEval, state)
-				return this.right.walk(Semantic.RuleEval, state)
+				this.left.walk(Semantic.RuleEval, state,info)
+				return this.right.walk(Semantic.RuleEval, state,info)
 
 			}
 			case Semantic.Arg: {
@@ -606,43 +623,47 @@ class PostfixOpArgNode extends Node {
 	search(pos: Position): Node | undefined {
 		return checkNodeRange(pos, this, this.arg)
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel:
 				/**xxx a.  addDefinition*/
 				this.name = this.functor.text + "/1"
 				state.graph.addDefinition(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.RuleHead:
 				/**xxx a :- xxx. addDefinition*/
 				this.name = this.functor.text + "/1"
+				info.callerName = this.name
 				state.graph.addDefinition(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.RuleBody:
 				/**xxx :- xxx a. addReference*/
 				this.name = this.functor.text + "/1"
 				state.graph.addReference(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				state.graph.addCall(this.name,info.callerName,this)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.DCGHead:
 				/**xxx a --> xxx. addDefinition*/
 				this.name = this.functor.text + "/3"
+				info.callerName = this.name
 				state.graph.addDefinition(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.DCGBody:
 				/**xxx --> xxx a. addReference*/
 				this.name = this.functor.text + "/3"
 				state.graph.addReference(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				state.graph.addCall(this.name,info.callerName,this)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.RuleEval:
 				/**:- xxx a.  addRef*/
 				this.name = this.functor.text + "/1"
 				state.graph.addReference(this.name, this)
-				return this.arg.walk(Semantic.Arg, state)
+				return this.arg.walk(Semantic.Arg, state,info)
 
 			case Semantic.Arg:
 
@@ -664,27 +685,31 @@ class PrefixOpArgNode extends Node {
 	search(pos: Position): Node | undefined {
 		return checkNodeRange(pos, this, undefined, this.arg)
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		switch (level) {
 			case Semantic.TopLevel:
 				/** :- xxx. */
 				if (this.functor.text == ":-") {
-					return this.arg.walk(Semantic.RuleEval, state)
+					return this.arg.walk(Semantic.RuleEval, state,info)
 				}
 				/**a xxx.  addDefinition*/
 				this.name = this.functor.text + "/1"
 				return state.graph.addDefinition(this.name, this)
 			case Semantic.RuleHead:
 				this.name = this.functor.text + "/1"
+				info.callerName = this.name
 				return state.graph.addDefinition(this.name, this)
 			case Semantic.RuleBody:
 				this.name = this.functor.text + "/1"
+				state.graph.addCall(this.name,info.callerName,this)
 				return state.graph.addReference(this.name, this)
 			case Semantic.DCGHead:
 				this.name = this.functor.text + "/3"
+				info.callerName = this.name
 				return state.graph.addDefinition(this.name, this)
 			case Semantic.DCGBody:
 				this.name = this.functor.text + "/3"
+				state.graph.addCall(this.name,info.callerName,this)
 				return state.graph.addReference(this.name, this)
 			case Semantic.RuleEval:
 			default:
@@ -705,8 +730,8 @@ class ClauseNode extends Node {
 		this.term = Term
 		this.end = endToken
 	}
-	walk(level: number, state: FileState): void {
-		this.term?.walk(Semantic.TopLevel, state)
+	walk(level: number, state: FileState,info:Info): void {
+		this.term?.walk(Semantic.TopLevel, state,info)
 	}
 	search(pos: Position) {
 		return this.term?.search(pos)
@@ -781,9 +806,9 @@ class Args extends Node{
 		super(nodes[0],nodes[nodes.length-1])
 		this._nodes=nodes
 	}
-	walk(level: number, state: FileState): void {
+	walk(level: number, state: FileState,info:Info): void {
 		/* always Sematic.Arg */
-		this._nodes.forEach(x =>x.walk(Semantic.Arg,state))
+		this._nodes.forEach(x =>x.walk(Semantic.Arg,state,info))
 	}
 	/**binary search a node */
 	search(pos:Position){ 

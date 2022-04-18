@@ -76,7 +76,7 @@ class Parser {
 			if (Answer !== undefined) {
 				clauses.push(Answer)
 				// this.optable.tryChangeOpTable(Answer)
-				Answer.walk(Semantic.TopLevel,this.fileState as FileState);
+				Answer.walk(Semantic.TopLevel,this.fileState!,{});
 			}
 			// postParse(Answer)
 

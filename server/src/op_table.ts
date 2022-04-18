@@ -11,7 +11,7 @@ class OpTable{
 		this.userdefined_op_table = new Map();
 	}
 
-	current_op(str: string, type: string){
+	current_op(str: string, type: string): number{
 		let prec: number | undefined;
 		const builtin_op_table = this.builtin_op_table;
 		const userdefined_op_table = this.userdefined_op_table;

@@ -3,12 +3,16 @@
 - [x] Diagnostics (Bug. You can choose to turn off by setting `"swi-lsp.sendDiagnostics":"false"`)
 - [x] Goto Definition (Only in one file)
 - [x] Find References (Only in one file)
-- [ ] Show Call Hierarchy (Work in progress)
-- [ ] WorkSpace (It's not started yet)
+- [x] Show Call Hierarchy (only in one file)
+- [ ] WorkSpace (Work in progress)
 
 ## Outline
- ![](./gifs/outline.gif)
+ ![image](./gifs/outline.gif)
 ## Goto Definition
-![](./gifs/GotoDefinition.gif)
+![image](./gifs/GotoDefinition.gif)
 ## Find References
-![](./gifs/FindRefrences.gif)
+![image](./gifs/FindRefrences.gif)
+## Hover
+![image](./gifs/Hover.gif)
+## Show Call Hierarchy
+![image](./gifs/callHierarchy.gif)
