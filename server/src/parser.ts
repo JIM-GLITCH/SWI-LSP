@@ -3,7 +3,7 @@
  */
 // import  lexerPeg = require("./lexerPeg");
 import fs = require("fs")
-import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, KeyValueNode, Semantic, Node } from './astNode'
+import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, Semantic, Node, DictNode } from './astNode'
 import { read_tokens, token, InputStream, stream, tokenType } from "./lexer"
 import { OpTable } from './op_table'
 import { pushError } from './pushDiagnostic'
@@ -163,19 +163,19 @@ class Parser {
 		if (tkNode === undefined) return [false]
 		if (Wantedtoken.layout) {
 			if (Wantedtoken.layout != tkNode.layout) {
-				pushError(tkNode.range, `${tkNode.text} or operator expected`)
+				pushError(tkNode.range, `${Wantedtoken.text} or operator expected`)
 				return [false]
 			}
 		}
 		if (Wantedtoken.text) {
 			if (Wantedtoken.text != tkNode.text) {
-				pushError(tkNode.range, `${tkNode.text} or operator expected`)
+				pushError(tkNode.range, `${Wantedtoken.text} or operator expected`)
 				return [false]
 			}
 		}
 		if (Wantedtoken.kind) {
 			if (Wantedtoken.kind != tkNode.kind) {
-				pushError(tkNode.range, `${tkNode.text} or operator expected`)
+				pushError(tkNode.range, `${Wantedtoken.text} or operator expected`)
 				return [false]
 			}
 		}
@@ -292,13 +292,64 @@ class Parser {
 				return [false]
 		}
 	}
-
+	read_dict(dictTag: token, openCurly: token , Precedence: number, context_flags: number):[false]|[true,Node,token?]{
+		const nodes: Node[] = [];
+		/* get dict{} */
+		if((openCurly?.next?.text == "}")){
+			return this.exprtl0(openCurly.next?.next,new DictNode(dictTag,nodes,openCurly.next),Precedence, context_flags)
+		}
+		const [flag1,S2] = this.read_KV(openCurly.next,context_flags,nodes);
+		if (flag1 == false)
+			return [false];
+		const [flag2, closeCurly] = this.read_KVs(S2, context_flags,nodes)
+		if (flag2 == false)
+			return [false];
+		return this.exprtl0(closeCurly?.next, new DictNode(dictTag, nodes,closeCurly!), Precedence, context_flags);
+	}
+	read_KVs(head:token|undefined,context_flags:number,nodes:Node[]):[false]|[true,token]{
+		if(head===undefined)
+			return[false];
+		if(head.text==","){
+			const [flag1,S1]=this.read_KV(head.next,context_flags,nodes)
+			if(!flag1)
+				return[false];
+			return this.read_KVs(S1,context_flags,nodes)
+		}
+		if (head.text == "}") {
+			return [true,head]
+		}
+		pushError(head.range, '`,` or `}` expected in arguments')
+		return [false]
+	}
+	read_KV(head:token|undefined,context_flags:number,nodes:Node[]):[false]|[true,token?]{
+		/* read key */
+		const [flag1,key,S1] = this.read(head,1200,context_flags|Flag.COLON_TERMINATES|Flag.COMMA_TERMINATES);
+		if (!flag1)
+			return [false];
+		nodes.push(key)
+		/* expect : */
+		const [flag2, S2] = this.expect(S1 as token, { text: ":" })
+		if(!flag2)
+			return[false];
+		/* read value */
+		const [flag3,value,S3]= this.read(S2,1200,context_flags|Flag.COMMA_TERMINATES);
+		if(! flag3)
+			return[false];
+		nodes.push(value)
+		return[true,S3];
+	}
 	read_var(head: token, tail: token | undefined, Precedence: number, context_flags: number) {
+		if(tail?.text == "{" && tail.layout == ""){
+			return this.read_dict(head,tail,Precedence,context_flags);
+		}
 		return this.exprtl0(tail, new VarNode(head), Precedence, context_flags)
 	}
 	read_name(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false] {
 		if (head.text == "-" && tail?.kind == Kind.integer) {
 			return this.exprtl0(tail.next, new NegativeNode({ sign: head, integer: tail }), Precedence, context_flags)
+		}
+		if(tail?.text == "{" && tail.layout == ""){
+			return this.read_dict(head,tail,Precedence,context_flags);
 		}
 		if (tail?.text == "(" && tail.layout == "") {
 			const nodes: Node[] = [];
@@ -522,6 +573,10 @@ class Parser {
 					return true;
 				}
 				return 1000 >= P
+			case ":":
+				if(context_falgs& Flag.COLON_TERMINATES){
+					return true;
+				}
 			default:
 				break
 		}
@@ -538,7 +593,39 @@ class Parser {
 	// %   It checks for following postfix or infix operators.	
 	exprtl0(head: token | undefined, Term: any, Precedence: number, context_flags: number): [false] | [true, any, token?] {
 		if (head === undefined)
-			return [true, Term, head]
+			return [true, Term, head];
+
+		/* special process context_flags */
+		switch (head.text){
+		case ",": 
+			if (context_flags & Flag.COMMA_TERMINATES) {
+				return [true, Term, head]
+			}
+			if (Precedence >= 1000) {
+				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
+				if (flag1)
+					return this.exprtl(S2, 1000, new CommaNode(Term,head,Next), Precedence, context_flags)
+				return [false]
+			}
+			break;
+		case "|": 
+			if (context_flags & Flag.BAR_TERMINATES) {
+				return [true, Term, head]
+			}
+			if (Precedence >= 1100) {
+				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
+				if (flag1)
+					return this.exprtl(S2, 1000, new SemicolonNode(Term, head, Next), Precedence, context_flags)
+				return [false]
+			}
+			break;
+		case ":":
+			if (context_flags & Flag.COLON_TERMINATES) {
+				return [true, Term, head]
+			}
+		default:
+			break;
+		}
 		if (head.kind == Kind.atom) {
 			{
 				const [flag1, L1, O1, R1, L2, O2] = this.ambigop(head.text)
@@ -568,28 +655,7 @@ class Parser {
 					return this.exprtl(new PostfixopToken(head, [L2, O2]), 0, Term, Precedence, context_flags)
 			}
 		}
-		if (head.text == ",") {
-			if (context_flags & Flag.COMMA_TERMINATES) {
-				return [true, Term, head]
-			}
-			if (Precedence >= 1000) {
-				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
-				if (flag1)
-					return this.exprtl(S2, 1000, new CommaNode(Term,head,Next), Precedence, context_flags)
-				return [false]
-			}
-		}
-		if (head.text == "|") {
-			if (context_flags & Flag.BAR_TERMINATES) {
-				return [true, Term, head]
-			}
-			if (Precedence >= 1100) {
-				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
-				if (flag1)
-					return this.exprtl(S2, 1000, new SemicolonNode(Term, head, Next), Precedence, context_flags)
-				return [false]
-			}
-		}
+		
 		{
 			const [flag1, Culprit] = this.cant_follow_expr(head, context_flags)
 			if (flag1) {

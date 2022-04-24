@@ -26,8 +26,8 @@ export {
 	PrefixOpArgNode,
 	ClauseNode,
 	IntegerNode,
-	KeyValueNode,
-	Semantic
+	Semantic,
+	DictNode
 }
 
 function combineRange(r1: Range, r2: Range): Range {
@@ -524,11 +524,11 @@ class CommaNode extends Node {
 		switch (level) {
 			case Semantic.TopLevel: {
 				/**xxx , xxx. */
-				pushError(this.range, "Cannot redefine ,/2")
+				return pushError(this.range, "Cannot redefine ,/2")
 			}
 			case Semantic.RuleHead: {
 				/**xxx , xxx :- xxx. */
-				pushError(this.range, "No permission to modify static procedure ,/2")
+				return pushError(this.range, "No permission to modify static procedure ,/2")
 			}
 			case Semantic.RuleBody: {
 				/**xxx:- xxx, xxx. */
@@ -592,7 +592,7 @@ class SemicolonNode extends Node {
 				return this.right.walk(Semantic.RuleBody, state,info)
 			}
 			case Semantic.DCGHead: {
-				pushError(this.range, "No permission to define dcg_nonterminal `Semicolon'")
+				return pushError(this.range, "No permission to define dcg_nonterminal `Semicolon'")
 			}
 			case Semantic.DCGBody: {
 				this.left.walk(Semantic.DCGBody, state,info)
@@ -737,15 +737,14 @@ class ClauseNode extends Node {
 		return this.term?.search(pos)
 	}
 }
-class KeyValueNode extends Node {
-	Key: any
-	Value: token
-	constructor(Key: any, Value: token) {
-		super(Key, Value)
-		this.Key = Key
-		this.Value = Value
+
+class  DictNode extends Node{
+	constructor(dictTag:token,keyValues:Node[],closeCurly:token){
+		super(dictTag,closeCurly)
+
 	}
 }
+
 
 function checkNodeRange(pos: Position, thisNode: Node | undefined, leftNode?: Node, rightNode?: Node): Node | undefined {
 	/**如果 pos 不在这个 node 的 range  内 返回空 */
