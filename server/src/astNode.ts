@@ -52,7 +52,7 @@ class Node {
 	walk(level: number, state: FileState,info:Info) { };
 	range!: Range
 	fullRange!: Range
-	kind!: Kind
+	kind!: K
 	functor: token | undefined
 	name!: string
 	arity?: number
@@ -75,7 +75,7 @@ class Node {
 	}
 }
 class VarNode extends Node {
-	kind = Kind.VarNode;
+	kind = K.VarNode;
 	functor
 	name:string
 	constructor(vartoken: token) {
@@ -92,7 +92,7 @@ class VarNode extends Node {
 
 class NegativeNode extends Node {
 	// TODO strange here? negativeNode has two token?
-	kind = Kind.NegativeNode;
+	kind = K.NegativeNode;
 	sign: token
 	number: token
 	constructor({ sign, integer }: { sign: token; integer: token }) {
@@ -110,7 +110,7 @@ class NegativeNode extends Node {
 }
 
 class FunctorNode extends Node {
-	kind = Kind.FunctorNode;
+	kind = K.FunctorNode;
 	functor: token
 	// open: token;
 	// close: token;
@@ -167,6 +167,7 @@ class FunctorNode extends Node {
 			case Semantic.RuleEval: {
 				/*:- a(xxx). */
 				state.opTable.tryNode(this)
+				state.tryImport(this)
 				this.name = this.functor.text + "/" + this.arity
 				state.graph.addReference(this.name, this)
 				return this.args?.walk(Semantic.Arg,state,info)
@@ -184,7 +185,7 @@ class FunctorNode extends Node {
 
 }
 class IntegerNode extends Node {
-	kind = Kind.IntegerNode;
+	kind = K.IntegerNode;
 	functor: token
 	name :string
 	constructor(head: token, tail?: token) {
@@ -198,7 +199,7 @@ class IntegerNode extends Node {
 }
 
 class AtomNode extends Node {
-	kind = Kind.AtomNode;
+	kind = K.AtomNode;
 	functor: token
 	constructor(head: token, tail?: token) {
 		super(head, tail)
@@ -244,7 +245,7 @@ class AtomNode extends Node {
 	}
 }
 class StringNode extends Node {
-	kind = Kind.StringNode;
+	kind = K.StringNode;
 	functor: token
 	name: string
 	constructor(string: token) {
@@ -254,7 +255,7 @@ class StringNode extends Node {
 	}
 }
 class BackQuotedNode extends Node {
-	kind = Kind.BackQuotedNode;
+	kind = K.BackQuotedNode;
 	functor: token
 	constructor(back_quoted_string: token) {
 		super(back_quoted_string)
@@ -263,7 +264,7 @@ class BackQuotedNode extends Node {
 }
 
 class ListNode extends Node {
-	kind = Kind.ListNode;
+	kind = K.ListNode;
 	// openList: token;
 	// closeList: token;
 	functor:token
@@ -292,7 +293,7 @@ class ListNode extends Node {
 				p = p.right
 				continue
 			}
-			else if (p instanceof AtomNode) {
+			else  {
 				break
 			}
 		}
@@ -309,7 +310,7 @@ class ListNode extends Node {
 }
 
 class ParenNode extends Node {
-	kind = Kind.ParenNode;
+	kind = K.ParenNode;
 	open: token
 	close: token
 	term: any
@@ -399,7 +400,7 @@ class opToken implements token {
 }
 
 class InfixopToken extends opToken {
-	kind = Kind.InfixopNode;
+	kind = K.InfixopNode;
 	// InfixNode
 	precs: [number, number, number]
 
@@ -412,7 +413,7 @@ class InfixopToken extends opToken {
 	}
 }
 class PostfixopToken extends opToken {
-	kind = Kind.PostfixopNode;
+	kind = K.PostfixopNode;
 	// PostfixopNode
 	precs: [number, number]
 
@@ -424,11 +425,11 @@ class PostfixopToken extends opToken {
 	}
 }
 class InfixOpArgNode extends Node {
-	kind = Kind.InfixOpArgNode;
+	kind = K.InfixOpArgNode;
 	functor: token
 	left: ArgNode
-	right: Node
-	constructor(Term: FunctorNode | AtomNode, Op: any, Other: Node) {
+	right: ArgNode
+	constructor(Term: FunctorNode | AtomNode, Op: any, Other: ArgNode) {
 		super(Term, Other)
 		this.functor = Op
 		this.left = Term
@@ -507,7 +508,7 @@ class InfixOpArgNode extends Node {
 	}
 }
 class CommaNode extends Node {
-	kind = Kind.CommaNode;
+	kind = K.CommaNode;
 	// comma: token;
 	left: ArgNode
 	right: ArgNode
@@ -566,7 +567,7 @@ class CommaNode extends Node {
 }
 
 class SemicolonNode extends Node {
-	kind = Kind.SemicolonNode;
+	kind = K.SemicolonNode;
 	// semicolon: token;
 	left: ArgNode
 	functor: token
@@ -611,7 +612,7 @@ class SemicolonNode extends Node {
 	}
 }
 class PostfixOpArgNode extends Node {
-	kind = Kind.PostfixOpArgNode;
+	kind = K.PostfixOpArgNode;
 	functor: token
 	arg: ArgNode
 	arity = 1
@@ -674,7 +675,7 @@ class PostfixOpArgNode extends Node {
 }
 type ArgNode = AtomNode | FunctorNode | PrefixOpArgNode | InfixOpArgNode | PostfixOpArgNode
 class PrefixOpArgNode extends Node {
-	kind = Kind.PrefixOpArgNode;
+	kind = K.PrefixOpArgNode;
 	functor: token
 	arg: ArgNode
 	constructor(Op: any, Arg: any) {
@@ -694,24 +695,32 @@ class PrefixOpArgNode extends Node {
 				}
 				/**a xxx.  addDefinition*/
 				this.name = this.functor.text + "/1"
-				return state.graph.addDefinition(this.name, this)
+				state.graph.addDefinition(this.name, this)
+				return this.arg.walk(Semantic.Arg,state,info)
 			case Semantic.RuleHead:
 				this.name = this.functor.text + "/1"
 				info.callerName = this.name
-				return state.graph.addDefinition(this.name, this)
+				state.graph.addDefinition(this.name, this)
+				info.callerName=this.name
+				return this.arg.walk(Semantic.Arg,state,info)
 			case Semantic.RuleBody:
 				this.name = this.functor.text + "/1"
 				state.graph.addCall(this.name,info.callerName,this)
-				return state.graph.addReference(this.name, this)
+				state.graph.addReference(this.name, this)
+				return this.arg.walk(Semantic.Arg,state,info)
 			case Semantic.DCGHead:
 				this.name = this.functor.text + "/3"
 				info.callerName = this.name
-				return state.graph.addDefinition(this.name, this)
+				state.graph.addDefinition(this.name, this)
+				return this.arg.walk(Semantic.Arg,state,info)
 			case Semantic.DCGBody:
 				this.name = this.functor.text + "/3"
 				state.graph.addCall(this.name,info.callerName,this)
-				return state.graph.addReference(this.name, this)
+				state.graph.addReference(this.name, this)
+				return this.arg.walk(Semantic.Arg,state,info)
 			case Semantic.RuleEval:
+				state.graph.addReference(this.name, this)
+				return this.arg.walk(Semantic.Arg,state,info)
 			default:
 				break
 		}
@@ -722,7 +731,7 @@ class PrefixOpArgNode extends Node {
  * term, end 中有一个可能是undefined
  */
 class ClauseNode extends Node {
-	kind = Kind.ClauseNode;
+	kind = K.ClauseNode;
 	term?: Node
 	end?: token
 	constructor(Term: any, endToken?: token) {
@@ -738,10 +747,53 @@ class ClauseNode extends Node {
 	}
 }
 
-class  DictNode extends Node{
-	constructor(dictTag:token,keyValues:Node[],closeCurly:token){
+class DictNode extends Node{
+	functor: token
+	args:Args
+	constructor(dictTag:token,nodes:Node[],closeCurly:token){
 		super(dictTag,closeCurly)
-
+		this.functor=dictTag
+		this.args=new Args(nodes)
+	}
+	search(pos: Position): Node | undefined {
+		return checkNodeRange(pos,this,undefined,this.args)
+	}
+	walk(level: number, state: FileState, info: Info): void {
+		this.name="C'dict "+this.functor.text
+		switch (level) {
+            case Semantic.TopLevel:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break
+            }
+            case Semantic.RuleHead:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break	
+            }
+            case Semantic.RuleBody:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break	
+            }
+            case Semantic.DCGHead:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break	
+            }
+            case Semantic.DCGBody:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break	
+            }
+            case Semantic.RuleEval:{
+				pushError(this.range,"Type error: `callable' expected, found (a dict)")
+				break	
+            }
+            case Semantic.Arg:{
+                break
+            }
+            default:
+                break;
+        }
+		if(this.functor.kind!=K.variable)
+			state.graph.addReference(this.name,this);
+		return this.args.walk(Semantic.Arg,state,info)
 	}
 }
 

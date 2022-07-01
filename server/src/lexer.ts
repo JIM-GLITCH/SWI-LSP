@@ -43,7 +43,7 @@ interface partialToken {
 	 */
 	range: Range;
 	// fromTo:FromTo;
-	kind: Kind;
+	kind: K;
 }
 
 
@@ -170,41 +170,41 @@ function setStreamState(s: stream, state: [uinteger, uinteger, uinteger]): undef
  */
 
 
-type tokenType = Kind;
+type tokenType = K;
 
 function atom(s: stream){
-	return token_func_gen(atom_token,Kind.atom)(s);
+	return token_func_gen(atom_token,K.atom)(s);
 }
 
-const end = token_func_gen(end_token,Kind.end);
+const end = token_func_gen(end_token,K.end);
 
-const variable = token_func_gen(variable_token,Kind.variable);
+const variable = token_func_gen(variable_token,K.variable);
 
-const integer = token_func_gen(integer_token,Kind.integer);
+const integer = token_func_gen(integer_token,K.integer);
 
-const float = token_func_gen(float_token,Kind.float);
+const float = token_func_gen(float_token,K.float);
 
-const double_quoted_list=token_func_gen(double_quoted_list_token,Kind.string);
+const double_quoted_list=token_func_gen(double_quoted_list_token,K.string);
 
-const open = token_func_gen(open_token,Kind.open);
+const open = token_func_gen(open_token,K.open);
 
-const close = token_func_gen(close_token,Kind.close);
+const close = token_func_gen(close_token,K.close);
 
-const open_list = token_func_gen(open_list_token,Kind.open_list);
+const open_list = token_func_gen(open_list_token,K.open_list);
 
-const close_list= token_func_gen(close_list_token,Kind.close_list);
+const close_list= token_func_gen(close_list_token,K.close_list);
 
-const open_curly = token_func_gen(open_curly_token,Kind.open_curly);
+const open_curly = token_func_gen(open_curly_token,K.open_curly);
 
-const close_curly = token_func_gen(close_curly_token,Kind.close_curly);
+const close_curly = token_func_gen(close_curly_token,K.close_curly);
 
-const ht_sep =token_func_gen(ht_sep_token,Kind.ht_sep);
+const ht_sep =token_func_gen(ht_sep_token,K.ht_sep);
 
-const comma =token_func_gen(comma_token,Kind.comma);
+const comma =token_func_gen(comma_token,K.comma);
 
-const  back_quoted_string= token_func_gen(back_quoted_string_token,Kind.back_quoted_string);
+const  back_quoted_string= token_func_gen(back_quoted_string_token,K.back_quoted_string);
 
-const quasi_quoted_string= token_func_gen(quasi_quoted_string_token,Kind.quasi_quoted_string_token);
+const quasi_quoted_string= token_func_gen(quasi_quoted_string_token,K.quasi_quoted_string_token);
 
 /*
 

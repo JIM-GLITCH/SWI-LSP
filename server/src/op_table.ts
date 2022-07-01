@@ -83,7 +83,7 @@ class OpTable{
 			const argNodes = (node as FunctorNode).getArgs()
 			if((argNodes.length !=3))
 				return;
-			if(argNodes[0].kind != Kind.IntegerNode || argNodes[1].kind != Kind.AtomNode || argNodes[2].kind !=Kind.AtomNode){
+			if(argNodes[0].kind != K.IntegerNode || argNodes[1].kind != K.AtomNode || argNodes[2].kind !=K.AtomNode){
 				return;
 			}
 			const args = argNodes.map(x=>(x as IntegerNode|AtomNode).functor.text);
@@ -117,7 +117,7 @@ class OpTable{
 			const argNodes = (node as FunctorNode).getArgs()
 			if((argNodes.length !=3))
 				return;
-			if(argNodes[0].kind != Kind.IntegerNode || argNodes[1].kind != Kind.AtomNode || argNodes[2].kind !=Kind.AtomNode){
+			if(argNodes[0].kind != K.IntegerNode || argNodes[1].kind != K.AtomNode || argNodes[2].kind !=K.AtomNode){
 				return;
 			}
 			const args = argNodes.map(x=>(x as IntegerNode|AtomNode).functor.text);
@@ -166,6 +166,16 @@ class OpTable{
 	}
 	opThreeNode(argNode:Node|undefined){
 		return (argNode instanceof FunctorNode && argNode.functor.text == "op" && argNode.arity==3)
+	}
+	/**复制另一个的opTable的userdefined op 到这个 optable */
+	merge(otherOpTable:OpTable){
+		/**只复制 userdefined_op */
+		const otherOpsMap = otherOpTable.userdefined_op_table;
+		otherOpsMap.forEach((type_prec,name)=>{
+			type_prec.forEach((prec,type)=>{
+				this.op(prec,type,name);
+			})
+		})
 	}
 }
 

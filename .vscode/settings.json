@@ -6,5 +6,6 @@
 	"typescript.format.placeOpenBraceOnNewLineForFunctions": false,
 	"editor.codeActionsOnSave": {
 		"source.fixAll.eslint": true
-	}
+	},
+	"todo-tree.tree.scanMode": "workspace only"
 }

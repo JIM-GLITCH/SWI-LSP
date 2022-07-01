@@ -10,10 +10,11 @@ import { pushError } from './pushDiagnostic'
 import { Flag } from "./context_flags"
 import { Graph } from './graph'
 import { FileState } from './fileState'
-export { Parser }
+import { AST } from './AST'
+export { Parser, }
 type opType = "fy" | "fx" | "xfy" | "xfx" | "yfx" | "yf" | "xf"
-type commaToken = token;
-type barToken = token;
+type commaToken = token
+type barToken = token
 function debug() {
 	const fileString = fs.readFileSync("./server/src/test/3.pl").toString()
 	const stream = InputStream(fileString)
@@ -44,26 +45,26 @@ function debug() {
 class Parser {
 	optable: OpTable
 	graph: Graph
-	fileState?:FileState;
-	constructor(fileState?:FileState) {
-		if(fileState){
+	fileState?: FileState
+	constructor(fileState?: FileState) {
+		if (fileState) {
 			this.optable = fileState.opTable
-			this.graph = fileState.graph;
-			this.fileState = fileState;
-		}else{
+			this.graph = fileState.graph
+			this.fileState = fileState
+		} else {
 			this.optable = new OpTable()
 			this.graph = new Graph()
 		}
 	}
 	/** make a compatible fucntion*/
-	parse(text:string){
-		if(this.fileState){
-			this.parseTextWithState(text);	
-		}else{
-			this.parseText(text);
+	parse(text: string) {
+		if (this.fileState) {
+			this.parseTextWithState(text)
+		} else {
+			this.parseText(text)
 		}
 	}
-	parseTextWithState(text: string){
+	parseTextWithState(text: string) {
 		const clauses: ClauseNode[] = []
 		const stream = InputStream(text)
 		for (; ;) {
@@ -75,13 +76,11 @@ class Parser {
 			const Answer = this.readClause(tokens)
 			if (Answer !== undefined) {
 				clauses.push(Answer)
-				// this.optable.tryChangeOpTable(Answer)
-				Answer.walk(Semantic.TopLevel,this.fileState!,{});
+				Answer.walk(Semantic.TopLevel, this.fileState!, {})
 			}
-			// postParse(Answer)
 
 		}
-		return clauses
+		this.fileState!.ast = new AST(clauses)
 	}
 	/**@deprecated incremental parsing need a state */
 	parseText(text: string) {
@@ -106,19 +105,19 @@ class Parser {
 	}
 	/**link the tokens except the end token */
 	ArrayToLinkedList(tokens: token[]) {
-		const head:{firstToken:token,lastToken:token} ={
-			firstToken : tokens[0],
-			lastToken :tokens[tokens.length - 1]
+		const head: { firstToken: token, lastToken: token } = {
+			firstToken: tokens[0],
+			lastToken: tokens[tokens.length - 1]
 		}
 		let p = head.firstToken
-		for (let index = 1; index < tokens.length-1; index++) {
+		for (let index = 1; index < tokens.length - 1; index++) {
 			const element = tokens[index]
 			p.next = element
 			p = p.next
 		}
-		const lastToken = tokens[tokens.length-1];
-		if(lastToken.kind != Kind.end && p!=lastToken){
-			p.next = lastToken;
+		const lastToken = tokens[tokens.length - 1]
+		if (lastToken.kind != K.end && p != lastToken) {
+			p.next = lastToken
 		}
 
 		return head
@@ -268,103 +267,103 @@ class Parser {
 	// }
 
 	read(head: token | undefined, Precedence: number, context_flags: number): [false] | [true, any, token?] {
-	if (head === undefined) return [false]
+		if (head === undefined) return [false]
 		const tail = head.next
 		switch (head.kind) {
-			case Kind.variable:
+			case K.variable:
 				return this.read_var(head, tail, Precedence, context_flags)
-			case Kind.atom:
+			case K.atom:
 				return this.read_name(head, tail, Precedence, context_flags)
-			case Kind.integer:
+			case K.integer:
 				return this.read_integer(head, tail, Precedence, context_flags)
-			case Kind.open_list:
+			case K.open_list:
 				return this.read_open_list(head, tail, Precedence, context_flags)
-			case Kind.open:
+			case K.open:
 				return this.read_open(head, tail, Precedence, context_flags)
-			case Kind.open_curly:
+			case K.open_curly:
 				return this.read_open_curly(head, tail, Precedence, context_flags)
-			case Kind.string:
+			case K.string:
 				return this.read_string(head, tail, Precedence, context_flags)
-			case Kind.back_quoted_string:
+			case K.back_quoted_string:
 				return this.read_back_quoted_string(head, tail, Precedence, context_flags)
 			default:
 				pushError(head.range, 'expression expected')
 				return [false]
 		}
 	}
-	read_dict(dictTag: token, openCurly: token , Precedence: number, context_flags: number):[false]|[true,Node,token?]{
-		const nodes: Node[] = [];
+	read_dict(dictTag: token, openCurly: token, Precedence: number, context_flags: number): [false] | [true, Node, token?] {
+		const nodes: Node[] = []
 		/* get dict{} */
-		if((openCurly?.next?.text == "}")){
-			return this.exprtl0(openCurly.next?.next,new DictNode(dictTag,nodes,openCurly.next),Precedence, context_flags)
+		if ((openCurly?.next?.text == "}")) {
+			return this.exprtl0(openCurly.next?.next, new DictNode(dictTag, nodes, openCurly.next), Precedence, context_flags)
 		}
-		const [flag1,S2] = this.read_KV(openCurly.next,context_flags,nodes);
+		const [flag1, S2] = this.read_KV(openCurly.next, context_flags, nodes)
 		if (flag1 == false)
-			return [false];
-		const [flag2, closeCurly] = this.read_KVs(S2, context_flags,nodes)
+			return [false]
+		const [flag2, closeCurly] = this.read_KVs(S2, context_flags, nodes)
 		if (flag2 == false)
-			return [false];
-		return this.exprtl0(closeCurly?.next, new DictNode(dictTag, nodes,closeCurly!), Precedence, context_flags);
+			return [false]
+		return this.exprtl0(closeCurly?.next, new DictNode(dictTag, nodes, closeCurly!), Precedence, context_flags)
 	}
-	read_KVs(head:token|undefined,context_flags:number,nodes:Node[]):[false]|[true,token]{
-		if(head===undefined)
-			return[false];
-		if(head.text==","){
-			const [flag1,S1]=this.read_KV(head.next,context_flags,nodes)
-			if(!flag1)
-				return[false];
-			return this.read_KVs(S1,context_flags,nodes)
+	read_KVs(head: token | undefined, context_flags: number, nodes: Node[]): [false] | [true, token] {
+		if (head === undefined)
+			return [false]
+		if (head.text == ",") {
+			const [flag1, S1] = this.read_KV(head.next, context_flags, nodes)
+			if (!flag1)
+				return [false]
+			return this.read_KVs(S1, context_flags, nodes)
 		}
 		if (head.text == "}") {
-			return [true,head]
+			return [true, head]
 		}
 		pushError(head.range, '`,` or `}` expected in arguments')
 		return [false]
 	}
-	read_KV(head:token|undefined,context_flags:number,nodes:Node[]):[false]|[true,token?]{
+	read_KV(head: token | undefined, context_flags: number, nodes: Node[]): [false] | [true, token?] {
 		/* read key */
-		const [flag1,key,S1] = this.read(head,1200,context_flags|Flag.COLON_TERMINATES|Flag.COMMA_TERMINATES);
+		const [flag1, key, S1] = this.read(head, 1200, context_flags | Flag.COLON_TERMINATES | Flag.COMMA_TERMINATES)
 		if (!flag1)
-			return [false];
+			return [false]
 		nodes.push(key)
 		/* expect : */
 		const [flag2, S2] = this.expect(S1 as token, { text: ":" })
-		if(!flag2)
-			return[false];
+		if (!flag2)
+			return [false]
 		/* read value */
-		const [flag3,value,S3]= this.read(S2,1200,context_flags|Flag.COMMA_TERMINATES);
-		if(! flag3)
-			return[false];
+		const [flag3, value, S3] = this.read(S2, 1200, context_flags | Flag.COMMA_TERMINATES)
+		if (!flag3)
+			return [false]
 		nodes.push(value)
-		return[true,S3];
+		return [true, S3]
 	}
 	read_var(head: token, tail: token | undefined, Precedence: number, context_flags: number) {
-		if(tail?.text == "{" && tail.layout == ""){
-			return this.read_dict(head,tail,Precedence,context_flags);
+		if (tail?.text == "{" && tail.layout == "") {
+			return this.read_dict(head, tail, Precedence, context_flags)
 		}
 		return this.exprtl0(tail, new VarNode(head), Precedence, context_flags)
 	}
 	read_name(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false] {
-		if (head.text == "-" && tail?.kind == Kind.integer) {
+		if (head.text == "-" && tail?.kind == K.integer) {
 			return this.exprtl0(tail.next, new NegativeNode({ sign: head, integer: tail }), Precedence, context_flags)
 		}
-		if(tail?.text == "{" && tail.layout == ""){
-			return this.read_dict(head,tail,Precedence,context_flags);
+		if (tail?.text == "{" && tail.layout == "") {
+			return this.read_dict(head, tail, Precedence, context_flags)
 		}
 		if (tail?.text == "(" && tail.layout == "") {
-			const nodes: Node[] = [];
+			const nodes: Node[] = []
 			/* get f() */
-			if((tail?.next?.text == ")")){
-				return this.exprtl0(tail.next?.next,new FunctorNode(head,nodes,tail.next),Precedence, context_flags)
+			if ((tail?.next?.text == ")")) {
+				return this.exprtl0(tail.next?.next, new FunctorNode(head, nodes, tail.next), Precedence, context_flags)
 			}
 			const [flag1, Arg1, S2] = this.read(tail.next, 1200, Flag.COMMA_TERMINATES)
 			if (flag1 == false)
 				return [false]
 			nodes.push(Arg1)
-			const [flag2, close] = this.read_args(S2, context_flags,nodes)
+			const [flag2, close] = this.read_args(S2, context_flags, nodes)
 			if (flag2 == false)
 				return [false]
-			return this.exprtl0(close?.next, new FunctorNode(head, nodes,close!), Precedence, context_flags)
+			return this.exprtl0(close?.next, new FunctorNode(head, nodes, close!), Precedence, context_flags)
 		}
 		const [flag1, Prec, Right] = this.prefixop(head.text)
 		if (flag1 == true) {
@@ -383,22 +382,22 @@ class Parser {
 		const [flag1, Arg1, S2] = this.read(tail, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 		if (flag1 == false)
 			return [false]
-		const [flag2,commaOrBarOrCloselist, RestArgs, closelist] = this.read_list(S2, context_flags)
-		       
+		const [flag2, commaOrBarOrCloselist, RestArgs, closelist] = this.read_list(S2, context_flags)
+
 		if (flag2 == false)
 			return [false]
-			/* get , term ]*/
-		if (commaOrBarOrCloselist.text == "]"){
-			const closelist = commaOrBarOrCloselist;
-			return this.exprtl0( closelist?.next,new ListNode(Arg1,closelist,RestArgs!),Precedence,context_flags)
+		/* get , term ]*/
+		if (commaOrBarOrCloselist.text == "]") {
+			const closelist = commaOrBarOrCloselist
+			return this.exprtl0(closelist?.next, new ListNode(Arg1, closelist, RestArgs!), Precedence, context_flags)
 		}
-		if(commaOrBarOrCloselist.text == ","){
-			const comma = commaOrBarOrCloselist;
-			return this.exprtl0( closelist?.next,new ListNode(Arg1,comma,RestArgs!),Precedence,context_flags)
+		if (commaOrBarOrCloselist.text == ",") {
+			const comma = commaOrBarOrCloselist
+			return this.exprtl0(closelist?.next, new ListNode(Arg1, comma, RestArgs!), Precedence, context_flags)
 		}
-		const bar = commaOrBarOrCloselist;
+		const bar = commaOrBarOrCloselist
 		/* get | term ]*/
-		return this.exprtl0(closelist?.next, new ListNode(Arg1,bar, RestArgs!), Precedence, context_flags)
+		return this.exprtl0(closelist?.next, new ListNode(Arg1, bar, RestArgs!), Precedence, context_flags)
 	}
 
 	read_open(head: token, tail: token | undefined, Precedence: number, context_flags: number): [true, any, token?] | [false] {
@@ -431,10 +430,10 @@ class Parser {
 	read_back_quoted_string(head: token, tail: token | undefined, Precedence: number, context_flags: number) {
 		return this.exprtl0(tail, new BackQuotedNode(head), Precedence, context_flags)
 	}
-	
+
 	// %   read_args(+Tokens) -TermList, -LeftOver
 	// %   parses {',' expr(999)} ')' and returns a list of terms.
-	read_args(head: token | undefined, context_flags: number,nodes:Node[]): [false] | [true,token?] {
+	read_args(head: token | undefined, context_flags: number, nodes: Node[]): [false] | [true, token?] {
 		if (head === undefined)
 			return [false]
 		if (head.text == ",") {
@@ -448,7 +447,7 @@ class Parser {
 			return [true, close]
 		}
 		if (head.text == ")") {
-			return [true,head]
+			return [true, head]
 		}
 		pushError(head.range, '`,` or `)` expected in arguments')
 		return [false]
@@ -456,29 +455,29 @@ class Parser {
 	// %   read_list(+Tokens)-TermList, -LeftOver
 	// %   parses {',' expr(999)} ['|' expr(999)] ']' and returns a list of terms.
 
-	read_list(head: token | undefined, context_flags: number): [false] | [true, commaToken|barToken, ListNode?, token?] {
+	read_list(head: token | undefined, context_flags: number): [false] | [true, commaToken | barToken, ListNode?, token?] {
 		if (head === undefined)
 			return [false]
 		if (head.text == ",") {
 			const [flag, Term, S2] = this.read(head.next, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
 			if (flag == false)
 				return [false]
-			const [flag2, commaOrBarOrCloselist,Rest, LastCloselist] = this.read_list(S2 as token, context_flags)
+			const [flag2, commaOrBarOrCloselist, Rest, LastCloselist] = this.read_list(S2 as token, context_flags)
 			if (flag2 == false)
 				return [false]
 			/* 得到  , Term ]  */
-			if (!Rest){
+			if (!Rest) {
 				const Closelist = commaOrBarOrCloselist       /*TODO emptyList*/
-				return [true,head,new ListNode(Term,Closelist,new AtomNode(Closelist)),LastCloselist]
+				return [true, head, new ListNode(Term, Closelist, new AtomNode(Closelist)), LastCloselist]
 			}
 			/**得到 , Term,Rest ]   */
-			if(commaOrBarOrCloselist.text == ","){
-				const comma = commaOrBarOrCloselist;
-				return [true,head, new ListNode(Term,comma,Rest),LastCloselist]
+			if (commaOrBarOrCloselist.text == ",") {
+				const comma = commaOrBarOrCloselist
+				return [true, head, new ListNode(Term, comma, Rest), LastCloselist]
 			}
 			/**得到 , Term|Rest ]   */
 			const commaOrBar = commaOrBarOrCloselist
-			return [true, head,new ListNode(Term,commaOrBar, Rest), LastCloselist]
+			return [true, head, new ListNode(Term, commaOrBar, Rest), LastCloselist]
 		}
 		if (head.text == "|") {
 			const [flag, Rest, S2] = this.read(head.next, 1200, Flag.COMMA_TERMINATES | Flag.BAR_TERMINATES)
@@ -487,10 +486,10 @@ class Parser {
 			const [flag1, S] = this.expect(S2 as token, { text: "]" })
 			if (flag1 == false)
 				return [false]
-			return [true,head, Rest, S2]
+			return [true, head, Rest, S2]
 		}
 		if (head.text == "]") {
-			return [true, head,undefined, head]
+			return [true, head, undefined, head]
 		}
 		pushError(head.range, '`,` `|` or `]` expected in list')
 		return [false]
@@ -508,7 +507,7 @@ class Parser {
 		{
 			const S1 = this.peepop(S0)
 
-			const flag2 = this.prefix_is_atom(S1, Oprec,context_flags)
+			const flag2 = this.prefix_is_atom(S1, Oprec, context_flags)
 			if (flag2) {
 				const [flag3, Answer, S] = this.exprtl(S1, Oprec, new AtomNode(Op), Precedence, context_flags)
 				if (flag3)
@@ -529,7 +528,7 @@ class Parser {
 
 	peepop(head: token | undefined) {
 		if (!head) return head
-		if (head.kind == Kind.atom && head.next?.text === "(" && head.next?.layout === "")
+		if (head.kind == K.atom && head.next?.text === "(" && head.next?.layout === "")
 			return head
 		{
 			const [flag1, L, P, R] = this.infixop(head.text)
@@ -553,9 +552,9 @@ class Parser {
 	// %   is true when the right context TokenList of a prefix operator
 	// %   of result precedence Precedence forces it to be treated as an
 	// %   atom, e.g. (- = X), p(-), [+], and so on.
-	prefix_is_atom(head: token | undefined, P: number,context_falgs:number) {
+	prefix_is_atom(head: token | undefined, P: number, context_falgs: number) {
 		if (head === undefined)
-			return true;
+			return true
 		switch (head.text) {
 			case ")":
 				return true
@@ -564,27 +563,27 @@ class Parser {
 			case "}":
 				return true
 			case "|":
-				if (context_falgs& Flag.BAR_TERMINATES) {
-					return true;
+				if (context_falgs & Flag.BAR_TERMINATES) {
+					return true
 				}
 				return 1100 >= P
 			case ",":
-				if (context_falgs& Flag.COMMA_TERMINATES) {
-					return true;
+				if (context_falgs & Flag.COMMA_TERMINATES) {
+					return true
 				}
 				return 1000 >= P
 			case ":":
-				if(context_falgs& Flag.COLON_TERMINATES){
-					return true;
+				if (context_falgs & Flag.COLON_TERMINATES) {
+					return true
 				}
 			default:
 				break
 		}
 		if (head instanceof InfixopToken)
-			return head.precs[0] >= P;
+			return head.precs[0] >= P
 		if (head instanceof PostfixopToken)
-			return head.precs[0] >= P;
-		
+			return head.precs[0] >= P
+
 		return false
 	}
 
@@ -593,40 +592,40 @@ class Parser {
 	// %   It checks for following postfix or infix operators.	
 	exprtl0(head: token | undefined, Term: any, Precedence: number, context_flags: number): [false] | [true, any, token?] {
 		if (head === undefined)
-			return [true, Term, head];
+			return [true, Term, head]
 
 		/* special process context_flags */
-		switch (head.text){
-		case ",": 
-			if (context_flags & Flag.COMMA_TERMINATES) {
-				return [true, Term, head]
-			}
-			if (Precedence >= 1000) {
-				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
-				if (flag1)
-					return this.exprtl(S2, 1000, new CommaNode(Term,head,Next), Precedence, context_flags)
-				return [false]
-			}
-			break;
-		case "|": 
-			if (context_flags & Flag.BAR_TERMINATES) {
-				return [true, Term, head]
-			}
-			if (Precedence >= 1100) {
-				const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
-				if (flag1)
-					return this.exprtl(S2, 1000, new SemicolonNode(Term, head, Next), Precedence, context_flags)
-				return [false]
-			}
-			break;
-		case ":":
-			if (context_flags & Flag.COLON_TERMINATES) {
-				return [true, Term, head]
-			}
-		default:
-			break;
+		switch (head.text) {
+			case ",":
+				if (context_flags & Flag.COMMA_TERMINATES) {
+					return [true, Term, head]
+				}
+				if (Precedence >= 1000) {
+					const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
+					if (flag1)
+						return this.exprtl(S2, 1000, new CommaNode(Term, head, Next), Precedence, context_flags)
+					return [false]
+				}
+				break
+			case "|":
+				if (context_flags & Flag.BAR_TERMINATES) {
+					return [true, Term, head]
+				}
+				if (Precedence >= 1100) {
+					const [flag1, Next, S2] = this.read(head.next, 1000, context_flags)
+					if (flag1)
+						return this.exprtl(S2, 1000, new SemicolonNode(Term, head, Next), Precedence, context_flags)
+					return [false]
+				}
+				break
+			case ":":
+				if (context_flags & Flag.COLON_TERMINATES) {
+					return [true, Term, head]
+				}
+			default:
+				break
 		}
-		if (head.kind == Kind.atom) {
+		if (head.kind == K.atom) {
 			{
 				const [flag1, L1, O1, R1, L2, O2] = this.ambigop(head.text)
 				if (flag1) {
@@ -655,7 +654,7 @@ class Parser {
 					return this.exprtl(new PostfixopToken(head, [L2, O2]), 0, Term, Precedence, context_flags)
 			}
 		}
-		
+
 		{
 			const [flag1, Culprit] = this.cant_follow_expr(head, context_flags)
 			if (flag1) {
@@ -668,21 +667,21 @@ class Parser {
 	}
 	cant_follow_expr(head: token, context_flags: number): [boolean, string?] {
 		switch (head.kind) {
-			case Kind.atom:
+			case K.atom:
 				return [true, "atom"]
-			case Kind.variable:
+			case K.variable:
 				return [true, "variable"]
-			case Kind.integer:
+			case K.integer:
 				return [true, "integer"]
-			case Kind.string:
+			case K.string:
 				return [true, "string"]
-			case Kind.back_quoted_string:
+			case K.back_quoted_string:
 				return [true, "back quoted string"]
-			case Kind.open:
+			case K.open:
 				return [true, "bracket"]
-			case Kind.open_list:
+			case K.open_list:
 				return [true, "bracket"]
-			case Kind.open_curly:
+			case K.open_curly:
 				return [true, "bracket"]
 			default:
 				return [false]
@@ -707,10 +706,10 @@ class Parser {
 		if (head instanceof PostfixopToken) {
 			const [L, O] = head.precs
 			if (Precedence >= O && C <= L) {
-				const S2 = this.peepop(head.next);
+				const S2 = this.peepop(head.next)
 				return this.exprtl(S2, O, new PostfixOpArgNode(head, Term), Precedence, context_flags)
 			}
-		}    
+		}
 		if (head.text == ",") {
 			// read_list or read_args 遇到 , 直接返回
 			if (context_flags & Flag.COMMA_TERMINATES) {
@@ -732,7 +731,7 @@ class Parser {
 				const [flag1, Next, S2] = this.read(head.next, 1100, context_flags)
 				if (!flag1)
 					return [false]
-				return this.exprtl(S2, 1100, new SemicolonNode(Term, head,Next), Precedence, context_flags)
+				return this.exprtl(S2, 1100, new SemicolonNode(Term, head, Next), Precedence, context_flags)
 			}
 		}
 		return [true, Term, head]
@@ -743,27 +742,5 @@ class Parser {
 
 
 
-/**
- *  `:-op(Prece,Type,Name).` change the grammar inmmediately!
-//  */
-// function postParse(Answer: ClauseNode | undefined)
-// {
-// 	const term = Answer?.term
-// 	if (!term)
-// 	{
-// 		return
-// 	}
-// 	//
-// 	if (term instanceof PrefixOpArgNode && term.functor.text == ":-")
-// 	{
-// 		const node = term.arg
-// 		if (node instanceof FunctorNode && node.functor.text == "op" && node.arity == 3)
-// 		{
-// 			const prec = Number(node.arg1.functor.text)
-// 			const type = (node.restArgs as ListNode).left.functor.text
-// 			const name = (node.restArgs as ListNode).right.left.functor.text//Bug here Atom ? token?
-// 			op(prec, type, name)
-// 		}
-// 	}
-// }
+
 // debug();

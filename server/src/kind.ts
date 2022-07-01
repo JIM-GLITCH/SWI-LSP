@@ -1,4 +1,4 @@
-const enum Kind {
+const enum K {
 	// token kind
 	atom = 1,
 	variable,
