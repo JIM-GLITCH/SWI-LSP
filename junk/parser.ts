@@ -4,13 +4,14 @@
 // import  lexerPeg = require("./lexerPeg");
 import fs = require("fs")
 import { AtomNode, BackQuotedNode, ClauseNode, CommaNode, FunctorNode, CurlyNode, InfixOpArgNode, InfixopToken, ListNode, NegativeNode, PostfixOpArgNode, PostfixopToken, PrefixOpArgNode, SemicolonNode, StringNode, VarNode, IntegerNode, Semantic, Node, DictNode } from './astNode'
-import { read_tokens, token, InputStream, stream, tokenType } from "./lexer"
-import { OpTable } from './op_table'
-import { pushError } from './pushDiagnostic'
-import { Flag } from "./context_flags"
-import { Graph } from './graph'
-import { FileState } from './fileState'
-import { AST } from './AST'
+import { read_tokens, token, InputStream, stream, tokenType } from "../server/src/lexer"
+import { OpTable } from '../server/src/op_table'
+import { pushError } from '../server/src/pushDiagnostic'
+import { Flag } from "../server/src/context_flags"
+import { Graph } from '../server/src/graph'
+import { FileState } from '../server/src/fileState'
+import { AST } from '../server/src/AST'
+import { mylexer ,tokenList} from '../server/src/lexer-by-moo';
 export { Parser, }
 type opType = "fy" | "fx" | "xfy" | "xfx" | "yfx" | "yf" | "xf"
 type commaToken = token
@@ -56,6 +57,22 @@ class Parser {
 			this.graph = new Graph()
 		}
 	}
+
+	// parseOnMoo(text: string){
+	// 	let clauseNodes=[];
+	// 	for(;;){
+	// 		let tokenList = mylexer.getTokens();
+	// 		if (tokenList.tokens.length==0){
+	// 			break;
+	// 		}
+	// 		let clauseNode = this.next(tokenList);
+	// 		if(clauseNode){
+	// 			clauseNodes.push(clauseNode);
+	// 			clauseNode.walk(Semantic.TopLevel, this.fileState!, {})
+	// 		}
+	// 	}
+	// }
+
 	/** make a compatible fucntion*/
 	parse(text: string) {
 		if (this.fileState) {
@@ -64,6 +81,7 @@ class Parser {
 			this.parseText(text)
 		}
 	}
+
 	parseTextWithState(text: string) {
 		const clauses: ClauseNode[] = []
 		const stream = InputStream(text)
@@ -270,7 +288,7 @@ class Parser {
 		if (head === undefined) return [false]
 		const tail = head.next
 		switch (head.kind) {
-			case K.variable:
+			case K.var:
 				return this.read_var(head, tail, Precedence, context_flags)
 			case K.atom:
 				return this.read_name(head, tail, Precedence, context_flags)
@@ -669,7 +687,7 @@ class Parser {
 		switch (head.kind) {
 			case K.atom:
 				return [true, "atom"]
-			case K.variable:
+			case K.var:
 				return [true, "variable"]
 			case K.integer:
 				return [true, "integer"]

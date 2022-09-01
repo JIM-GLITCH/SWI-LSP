@@ -1,6 +1,5 @@
 
-import { SSL_OP_NO_TLSv1_2 } from 'constants'
-import { Agent } from 'https'
+
 import { Position, Range } from 'vscode-languageserver'
 import { FileState } from './fileState'
 import { Graph } from './graph'
@@ -791,7 +790,7 @@ class DictNode extends Node{
             default:
                 break;
         }
-		if(this.functor.kind!=K.variable)
+		if(this.functor.kind!=K.var)
 			state.graph.addReference(this.name,this);
 		return this.args.walk(Semantic.Arg,state,info)
 	}

@@ -178,7 +178,7 @@ function atom(s: stream){
 
 const end = token_func_gen(end_token,K.end);
 
-const variable = token_func_gen(variable_token,K.variable);
+const variable = token_func_gen(variable_token,K.var);
 
 const integer = token_func_gen(integer_token,K.integer);
 

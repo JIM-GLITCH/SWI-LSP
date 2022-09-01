@@ -2,12 +2,9 @@
 {
 	"version": "0.2.0",
 	"configurations": [
-		{
-			"name": "Node.js - Debug Current File",
-			"type": "node",
-			"request": "launch",
-			"program": "${workspaceRoot}/test/test.js"
-		  },
+
+
+	
 		{
 			"type": "extensionHost",
 			"request": "launch",
@@ -39,6 +36,21 @@
 				"${workspaceRoot}/client/testFixture"
 			],
 			"outFiles": ["${workspaceRoot}/client/out/test/**/*.js"]
+		},
+		{
+			"name": "debug parser and lexer",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/server/src/parser-on-moo.ts",
+			"cwd": "${workspaceFolder}/server",
+			"outFiles": [
+				"${workspaceFolder}/server/out/*.js",
+				"!**/node_modules/**"
+			],
+			"preLaunchTask": {
+				"type": "npm",
+				"script": "watch"
+			}
 		}
 	],
 	"compounds": [
@@ -47,4 +59,5 @@
 			"configurations": ["Launch Client", "Attach to Server"]
 		}
 	]
+
 }

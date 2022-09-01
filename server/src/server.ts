@@ -4,7 +4,6 @@
  * ------------------------------------------------------------------------------------------- */
 import {
 	DocumentUri,
-	Position,
 	TextDocument
 } from 'vscode-languageserver-textdocument'
 import {
@@ -13,34 +12,17 @@ import {
 	CallHierarchyItem,
 	CallHierarchyOutgoingCall,
 	CompletionItem,
-	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, ProposedFeatures, Range, SymbolKind, TextDocumentIdentifier, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
+	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, Position, ProposedFeatures, Range, ResponseError, SelectionRange, SymbolInformation, SymbolKind, TextDocumentIdentifier, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
 } from 'vscode-languageserver/node'
-import { AST } from './AST'
-import { Node } from './astNode'
-import { FileState } from './fileState'
-import { Parser } from './parser'
-import child_process = require('child_process')
-import path = require('path')
-import {G} from "./globalVars"
+import { g} from "./globalVars"
+import { MyParser } from './parser-on-moo'
+import { compound, CstNode, fileCst, isCstBranchNode,infix_compound, Atomic } from './cst2'
+import { match } from 'ts-pattern'
 export {
-	localDiagnostics,
-	PrologLibPath,
 	validateTextDocument
 }
-const g =G.getInstance()
-const fileStateMap = g.fileStateMap;
 
-
-/** 用来收集 diagnostics ( error, warning, hint, information ) 然后再发出去 */
-let localDiagnostics: Diagnostic[] = []
-let PrologLibPath = (() => {
-	if (process.platform === "win32") {
-		let swiplPath = child_process.execSync("where.exe swipl").toString()
-		const swiplHomePath = swiplPath.split("\\").slice(0, -2)
-		return path.join(...swiplHomePath, "library")
-	}
-})() 
-
+let DocumentManager=g.DocumentManager;
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
 const connection = createConnection(ProposedFeatures.all)
@@ -80,7 +62,7 @@ connection.onInitialize((params: InitializeParams) => {
 			documentSymbolProvider: true,
 			definitionProvider: true,
 			hoverProvider: true,
-			referencesProvider: true,
+			referencesProvider: false,
 			callHierarchyProvider: {
 
 			},
@@ -171,15 +153,24 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	// In this simple example we get the settings for every validate run.
 	const settings = await getDocumentSettings(textDocument.uri)
 	const text = textDocument.getText()
-	const textDocumentUri = textDocument.uri
-	const fileState = new FileState(textDocument)
-
-	localDiagnostics = [];
-	(new Parser(fileState)).parseTextWithState(text)
-	fileStateMap.set(textDocumentUri, fileState)
+	const uri = textDocument.uri
+	// const fileState = new FileState(textDocument)
 
 	
+// (new Parser(fileState)).parseTextWithState(text)
+	let parser =new MyParser();
+	parser.reset(text);
+	let docmentObj =await parser.parse();
+	// while(!DocumentManager.get(uri)){
+	// 	await sleep(1000);
+	// }
+	// doc = DocumentManager.get(uri);
+	// doc.fileCst = fileCst;
+	DocumentManager.set(uri,docmentObj)
+
+
 	// Send the computed diagnostics to VSCode.
+	let localDiagnostics:Diagnostic[] = parser.diagnostics;	
 	if (settings.sendDiagnostics == "true") {
 		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: localDiagnostics })
 	} else {//settings.sendDiagnostics=="false"
@@ -215,25 +206,65 @@ connection.onCompletion(
 const sleep = (ms: number) => {
 	return new Promise(resolve => setTimeout(resolve, ms))
 }
-connection.onDocumentSymbol(async (_params) => {
-	// _params.textDocument.version
-	const file = _params.textDocument.uri
-	let state
-	while (!(state = fileStateMap.get(file))) {
-		await sleep(100)
+
+connection.onDocumentSymbol(async (_params)=>{
+	const uri = _params.textDocument.uri
+	let fileCst:fileCst|undefined;
+	while (!(fileCst = DocumentManager.get(uri)?.fileCst)){
+		await sleep(100);
 	}
-	const Symbols: DocumentSymbol[] = []
-	state.graph.definitionsMap.forEach((nodeSet, name) => {
-		const range = (nodeSet?.values().next().value as Node).range
-		Symbols.push({
-			name: name,
-			kind: SymbolKind.Function,
-			range: range,
-			selectionRange: range,
-		})
-	})
-	return Symbols
+	let Symbols: DocumentSymbol[]  = [];
+	let prev_name ="";
+	for (let i = 0; i < fileCst.length; i++) {
+		const clause = fileCst[i];
+		let term =clause.term
+		let name="";
+		let range =clause.getRange();
+		let selectionRange =Range.create({line:0,character:1},{line:0,character:1});
+		if(term){
+			match(term)
+			.with({value:":-",type:"infix_compound"},(term:infix_compound)=>{
+				let lArg =term.lArg;
+				name=isCstBranchNode(lArg) ? lArg.value+'/'+lArg.args.length : lArg.value;
+				selectionRange=lArg.getRange();
+			})
+			.with({type:"infix_compound"}, {type:"compound"},(term:infix_compound)=>{
+				name=  term.value+'/'+term.args.length;
+				range=term.getRange();
+				selectionRange=term.getRange();
+			})
+			.with({type:"Leaf"},(term:Atomic)=>{
+				name = term.value;
+				selectionRange = term.getRange();
+			})
+			.otherwise(()=>{})
+		}
+		if(name!=prev_name){
+			Symbols.push({name,range,selectionRange,kind:SymbolKind.Function})
+		}
+	}
+	return Symbols;
+
 })
+// connection.onDocumentSymbol(async (_params) => {
+// 	// _params.textDocument.version
+// 	const uri = _params.textDocument.uri
+// 	let fileCst;
+// 	while (!(fileCst = DocumentManager.get(uri)?.fileCst)) {
+// 		await sleep(100)
+// 	}
+// 	const Symbols: DocumentSymbol[] = []
+// 	graph.definitionsMap.forEach((nodeSet, name) => {
+// 		const range = (nodeSet?.values().next().value as Node).range
+// 		Symbols.push({
+// 			name: name,
+// 			kind: SymbolKind.Function,
+// 			range: range,
+// 			selectionRange: range,
+// 		})
+// 	})
+// 	return Symbols
+// })
 
 // This handler resolves additional information for the item selected in
 // the completion list.
@@ -252,198 +283,221 @@ connection.onCompletionResolve(
 
 
 connection.onDefinition(async (_params) => {
-	const position = _params.position
+	const position = _params.   position
 	const uri = _params.textDocument.uri
-	let ast: AST | undefined
-	while (!(ast = fileStateMap.get(uri)?.ast)) {
+	let fileCst;
+	while (!(fileCst = DocumentManager.get(uri)?.fileCst)) {
 		await sleep(100)
 	}
-	const node = ast.search(position)
-	const name = node?.name
-	const state = fileStateMap.get(uri)
-	if (!name)
-		return []
+	const node = fileCst.search(position)
+	const graph = DocumentManager.get(uri)?.graph!
 	const definitions: LocationLink[] = []
-	state?.graph.getDefinations(name).forEach((x) => {
+	let nodeSet = graph.getDefinations(node);
+	nodeSet.forEach((x) => {
+		let originSelectionRange=node?.getRange();
+		let targetUri=uri;
+		let	targetRange=x.getRange();
+		let targetSelectionRange= x.getRange();
 		definitions.push({
-			originSelectionRange: node.range,
-			targetUri: uri,
-			targetRange: x.range,
-			targetSelectionRange: x.range
+			originSelectionRange,
+			targetUri,
+			targetRange,
+			targetSelectionRange,
 		})
 	})
 	return definitions
 })
 
 
-connection.onReferences(async (_params) => {
-	const position = _params.position
-	const uri = _params.textDocument.uri
-	let ast: AST | undefined
-	while (!(ast = fileStateMap.get(uri)?.ast)) {
-		await sleep(100)
-	}
-	const node = ast.search(position)
-	const name = node?.name
-	const state = fileStateMap.get(uri)
-	if (!name)
-		return []
-	const references: Location[] = []
-	/* search in the same file */
-	state?.graph.getReferences(name).forEach((x) => {
-		references.push({
-			uri: uri,
-			range: x.range
-		})
-	})
-	/* search in imported module*/
-	for (const _uri of state?.importedFileSet??[]) {
-		
-		let fileState : FileState|undefined
-		let uri = _uri as string
-		while (!(fileState = fileStateMap.get(uri))) {
-			await sleep(100)
-		}
-		/* search in the imported file */
-		fileState?.graph.getReferences(name).forEach((x) => {
-			references.push({
-				uri: uri,
-				range: x.range
-			})
-		})   
-	}
-	return references
-})
+// connection.onReferences(async (_params) => {
+// 	const position = _params.position
+// 	const uri = _params.textDocument.uri
+// 	let ast: AST | undefined
+// 	while (!(ast = fileStateMap.get(uri)?.ast)) {
+// 		await sleep(100)
+// 	}
+// 	const node = ast.search(position)
+// 	const name = node?.name
+// 	const state = fileStateMap.get(uri)
+// 	if (!name)
+// 		return []
+// 	const references: Location[] = []
+// 	/* search in the same file */
+// 	state?.graph.getReferences(name).forEach((x) => {
+// 		references.push({
+// 			uri: uri,
+// 			range: x.range
+// 		})
+// 	})
+// 	/* search in imported module*/
+// 	for (const _uri of state?.importedFileSet ?? []) {
+
+// 		let fileState: FileState | undefined
+// 		let uri = _uri as string
+// 		while (!(fileState = fileStateMap.get(uri))) {
+// 			await sleep(100)
+// 		}
+// 		/* search in the imported file */
+// 		fileState?.graph.getReferences(name).forEach((x) => {
+// 			references.push({
+// 				uri: uri,
+// 				range: x.range
+// 			})
+// 		})
+// 	}
+// 	return references
+// })
 
 
 connection.onHover(async (_params) => {
 	const pos = _params.position
-	const uri = _params.textDocument.uri
-	let ast
-	while (!(ast = fileStateMap.get(uri)?.ast)) {
-		await sleep(100)
+	const uri = _params.textDocument.uri;
+	let fileCst:fileCst 
+	while(!(fileCst = DocumentManager.get(uri)?.fileCst!)){
+		await sleep(100);
 	}
-	const node = ast.search(pos)
-
+	// TODO remove try catch and find the problem
+	try{
+	const node:CstNode|undefined = fileCst.search(pos)
+	if(!node){
+		return {
+			contents: "unknown",
+			range: undefined
+		}
+	}
+	if(isCstBranchNode(node)){
+		return {
+			contents:node.name,
+			range:node.getRange(),
+			
+		}
+	}
 	return {
-		contents: node?.name ?? " ",
-		range: node?.range
+		contents:node.value,
+		range:node.getRange()
+	}
+	}catch {
+		return {
+			contents: "unknown",
+			range: undefined
+		}
 	}
 })
 
 
-connection.onRequest("textDocument/prepareCallHierarchy", async (_params: { position: Position, textDocument: TextDocumentIdentifier }): Promise<CallHierarchyItem[]> => {
-	const pos: Position = _params.position
-	const uri = _params.textDocument.uri
-	let ast
-	while (!(ast = fileStateMap.get(uri)?.ast)) {
-		await sleep(100)
-	}
-	const node = ast.search(pos)
-	const name = node?.name
-	if (!name)
-		return []
-	// const items:CallHierarchyItem[] =[];    
-	// const state = fileStateMap.get(uri);
-	// const callerNameMap =state?.graph.getIncomingCalls(name)
-	// if(callerNameMap){
-	// 	callerNameMap.forEach((nodeSet,callerName)=>{
-	// 		if(!nodeSet)
-	// 			return ;
-	// 		items.push({
-	// 			name:callerName,
-	// 			kind:SymbolKind.Function,
-	// 			uri:uri,
-	// 			range
-	// 		})
-	// 	})
-	// }
+// connection.onRequest("textDocument/prepareCallHierarchy", async (_params: { position: Position, textDocument: TextDocumentIdentifier }): Promise<CallHierarchyItem[]> => {
+// 	const pos: Position = _params.position
+// 	const uri = _params.textDocument.uri
+// 	let ast
+// 	while (!(ast = fileStateMap.get(uri)?.ast)) {
+// 		await sleep(100)
+// 	}
+// 	const node = ast.search(pos)
+// 	const name = node?.name
+// 	if (!name)
+// 		return []
+// 	// const items:CallHierarchyItem[] =[];    
+// 	// const state = fileStateMap.get(uri);
+// 	// const callerNameMap =state?.graph.getIncomingCalls(name)
+// 	// if(callerNameMap){
+// 	// 	callerNameMap.forEach((nodeSet,callerName)=>{
+// 	// 		if(!nodeSet)
+// 	// 			return ;
+// 	// 		items.push({
+// 	// 			name:callerName,
+// 	// 			kind:SymbolKind.Function,
+// 	// 			uri:uri,
+// 	// 			range
+// 	// 		})
+// 	// 	})
+// 	// }
 
-	return [{
-		name: node.name,
-		kind: SymbolKind.Function,
-		uri: uri,
-		range: node.range,
-		selectionRange: node.range,
-	}]
-})
-
-
-connection.onRequest("callHierarchy/incomingCalls", (_params: any) => {
-	const item = _params.item
-	if (!item)
-		return []
-	const uri = item.uri
-	const name = item.name
-
-	const items: CallHierarchyIncomingCall[] = []
-	const state = fileStateMap.get(uri)
-	const callerNameMap = state?.graph.getIncomingCalls(name)
-	if (callerNameMap) {
-		callerNameMap.forEach((nodeSet, callerName) => {
-			if (!nodeSet)
-				return
-			const range = state?.graph.getDefinations(callerName).values().next().value.range
-			const fromRanges: Range[] = []
-			nodeSet.forEach(x => fromRanges.push(x.range))
-			items.push({
-				from: {
-					name: callerName,
-					kind: SymbolKind.Function,
-					uri,
-					range: range,
-					selectionRange: range
-				},
-				fromRanges: fromRanges
-			})
-		})
-	}
-	return items
-})
+// 	return [{
+// 		name: node.name,
+// 		kind: SymbolKind.Function,
+// 		uri: uri,
+// 		range: node.range,
+// 		selectionRange: node.range,
+// 	}]
+// })
 
 
-connection.onRequest("callHierarchy/outgoingCalls", (_params: any) => {
-	const item = _params.item
-	if (!item)
-		return []
-	const uri = item.uri
-	const name = item.name
+// connection.onRequest("callHierarchy/incomingCalls", (_params: any) => {
+// 	const item = _params.item
+// 	if (!item)
+// 		return []
+// 	const uri = item.uri
+// 	const name = item.name
 
-	const items: CallHierarchyOutgoingCall[] = []
-	const state = fileStateMap.get(uri)
-	const calledNameMap = state?.graph.getOutgoingCalls(name)
-	if (calledNameMap) {
-		calledNameMap.forEach((nodeSet, calledName) => {
-			if (!nodeSet)
-				return
-			const fromRanges: Range[] = []
-			nodeSet.forEach(x => fromRanges.push(x.range))
-			const range = fromRanges[0]
-			items.push({
-				to: {
-					name: calledName,
-					kind: SymbolKind.Function,
-					uri,
-					range: range,
-					selectionRange: range
-				},
-				fromRanges: fromRanges
-			})
-		})
-	}
-	return items
-})
-connection.onDidOpenTextDocument(async(_params)=>{
-	const textDocumentItem = _params.textDocument
-	const version = textDocumentItem.version
-	const languageId = textDocumentItem.languageId
-	const text = textDocumentItem.text
-	const uri = textDocumentItem.uri
-	const textDocument=TextDocument.create(uri,languageId,version,text)
-	validateTextDocument(textDocument);
-});
-connection.onDidCloseTextDocument(async (_params)=>{
-})
+// 	const items: CallHierarchyIncomingCall[] = []
+// 	const state = fileStateMap.get(uri)
+// 	const callerNameMap = state?.graph.getIncomingCalls(name)
+// 	if (callerNameMap) {
+// 		callerNameMap.forEach((nodeSet, callerName) => {
+// 			if (!nodeSet)
+// 				return
+// 			const range = state?.graph.getDefinations(callerName).values().next().value.range
+// 			const fromRanges: Range[] = []
+// 			nodeSet.forEach(x => fromRanges.push(x.range))
+// 			items.push({
+// 				from: {
+// 					name: callerName,
+// 					kind: SymbolKind.Function,
+// 					uri,
+// 					range: range,
+// 					selectionRange: range
+// 				},
+// 				fromRanges: fromRanges
+// 			})
+// 		})
+// 	}
+// 	return items
+// })
+
+
+// connection.onRequest("callHierarchy/outgoingCalls", (_params: any) => {
+// 	const item = _params.item
+// 	if (!item)
+// 		return []
+// 	const uri = item.uri
+// 	const name = item.name
+
+// 	const items: CallHierarchyOutgoingCall[] = []
+// 	const state = fileStateMap.get(uri)
+// 	const calledNameMap = state?.graph.getOutgoingCalls(name)
+// 	if (calledNameMap) {
+// 		calledNameMap.forEach((nodeSet, calledName) => {
+// 			if (!nodeSet)
+// 				return
+// 			const fromRanges: Range[] = []
+// 			nodeSet.forEach(x => fromRanges.push(x.range))
+// 			const range = fromRanges[0]
+// 			items.push({
+// 				to: {
+// 					name: calledName,
+// 					kind: SymbolKind.Function,
+// 					uri,
+// 					range: range,
+// 					selectionRange: range
+// 				},
+// 				fromRanges: fromRanges
+// 			})
+// 		})
+// 	}
+// 	return items
+// })
+// connection.onDidOpenTextDocument(async (_params) => {
+// 	const textDocumentItem = _params.textDocument
+// 	const version = textDocumentItem.version
+// 	const languageId = textDocumentItem.languageId
+// 	const text = textDocumentItem.text
+// 	const uri = textDocumentItem.uri
+// 	const textDocument = TextDocument.create(uri, languageId, version, text)
+// 	DocumentManager.set(uri,{});
+// 	await validateTextDocument(textDocument)
+// })
+// connection.onDidCloseTextDocument(async (_params) => {
+// })
 // Make the text document manager listen on the connection
 // for open, change and close text document events
 documents.listen(connection)

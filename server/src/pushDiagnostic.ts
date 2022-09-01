@@ -3,46 +3,37 @@
  * */ 
 
 import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver';
-import { localDiagnostics } from './server';
 export{
-	pushWarning,
-	pushError,
-	pushInformation,
-	pushHint
+	warning,
+	error,
+	information,
+	hint
 };
-function pushWarning(range:Range,message?:string,source?:string){
-	const diagnostic: Diagnostic = {
+function warning(range:Range,message?:string){
+	return {
 		severity: DiagnosticSeverity.Warning,
 		range: range,
 		message: message??" ",
-		source: source
 	};
-	localDiagnostics.push(diagnostic);
 }
-function pushError(range:Range,message?:string,source?:string){
-	const diagnostic: Diagnostic = {
+function error(range:Range,message?:string){
+	return  {
 		severity: DiagnosticSeverity.Error,
 		range: range,
 		message: message??" ",
-		source: source
 	};
-	localDiagnostics.push(diagnostic);
 }
-function pushInformation(range:Range,message?:string,source?:string): void{
-	const diagnostic: Diagnostic = {
+function information(range:Range,message?:string){
+	return {
 		severity: DiagnosticSeverity.Information,
 		range: range,
 		message: message??" ",
-		source: source
 	};
-	localDiagnostics.push(diagnostic);
 }
-function pushHint(range:Range,message?:string,source?:string){
-	const diagnostic: Diagnostic = {
+function hint(range:Range,message?:string,source?:string){
+	return{
 		severity: DiagnosticSeverity.Hint,
 		range: range,
 		message: message??" ",
-		source: source
 	};
-	localDiagnostics.push(diagnostic);
 }

@@ -1,16 +1,17 @@
-import { Node } from './astNode'
+
+import { CstNode } from "./cst2"
 export{Graph}
 /**One document corresponds to one graph */
 type name = string  
 class Graph{
 	/** */
 	nodesSet: Set<any>
-	referencesMap: Map<name, Set<Node>|undefined>
-	definitionsMap: Map<name, Set<Node>|undefined>
+	referencesMap: Map<name, Set<CstNode>|undefined>
+	definitionsMap: Map<name, Set<CstNode>|undefined>
 	/** ` called name -> caller name -> callednodes`*/
-	incomingCallsMap:Map<name,Map<name,Set<Node>|undefined>|undefined>
+	incomingCallsMap:Map<name,Map<name,Set<CstNode>|undefined>|undefined>
 	/** ` caller name -> called name -> callednodes` */
-	outgoingCallsMap:Map<name,Map<name,Set<Node>|undefined>|undefined>
+	outgoingCallsMap:Map<name,Map<name,Set<CstNode>|undefined>|undefined>
 	constructor(){    
 		this.nodesSet = new Set();
 		this.referencesMap = new Map();
@@ -18,38 +19,45 @@ class Graph{
 		this.incomingCallsMap= new Map();
 		this.outgoingCallsMap = new Map();		
 	}
-	getDefinations(name:string){
-		return this.definitionsMap.get(name)??[]
+	getDefinations(node:CstNode|undefined){
+		if(!node){
+			return[];
+		}
+		return this.definitionsMap.get(node.name)??[]
 	}
 
-	getReferences(name:string){
-		return this.referencesMap.get(name)??[]
+	getReferences(node:CstNode){
+		return this.referencesMap.get(node.name)??[]
 	}
 
-	getIncomingCalls(calledName:string){
-		return this.incomingCallsMap.get(calledName)
+	getIncomingCalls(calledNode:CstNode){
+		return this.incomingCallsMap.get(calledNode.name)
 	}
 
-	getOutgoingCalls(callerName:string){
-		return this.outgoingCallsMap.get(callerName)
+	getOutgoingCalls(callerNode:CstNode){
+		return this.outgoingCallsMap.get(callerNode.name)
 	}
 
-	addDefinition(name:string,node:Node){
+	addDefinition(node:CstNode){
+		let  name = node.name
 		const set = this.definitionsMap.get(name);
 		set
 		?	set.add(node)
 		:	this.definitionsMap.set(name,new Set([node]));
-		this.addReference(name,node)
+		this.addReference(node)
 	}
 
-	addReference(name:string,node:Node){
+	addReference(node:CstNode){
+		let name = node.name
 		const set = this.referencesMap.get(name);
 		set
 		?	set.add(node)
 		:	this.referencesMap.set(name,new Set([node]));
 	}
 
-	addIncomingCall(calledName:string,callerName:string,calledNode:Node){
+	addIncomingCall(calledNode:CstNode,callerNode:CstNode){
+		let callerName = callerNode.name;
+		let calledName:string = calledNode.name;
 		let callerMap = this.incomingCallsMap.get(calledName)
 		if(callerMap===undefined){
 			this.incomingCallsMap.set(calledName,new Map( [[callerName,new Set([calledNode])]] ))
@@ -62,10 +70,12 @@ class Graph{
 		return calledNodeSet.add(calledNode)
 	}
 
-	addOutgoingCall(callerName:string,calledName:string,calledNode:Node){
+	addOutgoingCall(callerNode:CstNode,calledNode:CstNode){
+		let callerName = callerNode.name;
+		let calledName = calledNode.name;
 		let calledNameMap = this.outgoingCallsMap.get(callerName)
 		if(calledNameMap===undefined){
-			return this.outgoingCallsMap.set(callerName,new Map([[calledName,new Set([calledNode])]] ))
+			return this.outgoingCallsMap.set(callerNode.name,new Map([[calledNode.name,new Set([calledNode])]] ))
 		}
 		let calledNodeSet = calledNameMap.get(calledName)
 		if(calledNodeSet===undefined){
@@ -73,13 +83,11 @@ class Graph{
 		}
 		return calledNodeSet.add(calledNode)
 	}
-	addCall(calledName:string|undefined,callerName:string|undefined,calledNode:Node){
-		if (calledName ===undefined || callerName ===undefined)
-			return;
-		this.addIncomingCall(calledName,callerName,calledNode)
-		return this.addOutgoingCall(callerName,calledName,calledNode)
+	addCall(calledNode:CstNode,callerNode:CstNode){
+		this.addIncomingCall(calledNode,callerNode)
+		return this.addOutgoingCall(callerNode,calledNode)
 	}
-	delDefination(name:string,node:Node){
+	delDefination(name:string,node:CstNode){
 		const set = this.definitionsMap.get(name);
 		set?.delete(node);
 		if(set?.size == 0)
@@ -88,7 +96,7 @@ class Graph{
 	
 	}
 
-	delReference(name:string,node:Node){
+	delReference(name:string,node:CstNode){
 		const set = this.referencesMap.get(name);
 		set?.delete(node);
 		if(set?.size == 0)

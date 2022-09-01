@@ -56,6 +56,7 @@
 		}
 	},
 	"scripts": {
+		"antlr4ts": "antlr4ts -visitor ./antlr4test/MyGrammar.g4",
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -b",
 		"watch": "tsc -b -w",
@@ -72,5 +73,6 @@
 		"mocha": "^9.2.1",
 		"typescript": "^4.6.2"
 	},
-	"dependencies": {}
+	"dependencies": {},
+	"type": "module"
 }

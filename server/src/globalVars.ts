@@ -1,22 +1,29 @@
+import path = require('path')
 import { DocumentUri } from 'vscode-languageserver'
-import { FileState } from './fileState'
+import  child_process =require("child_process");
+import { Graph } from './graph'
+import { optable } from './operators'
+import { fileCst } from './cst2'
+export{g};
 /**
- * use Singleton class to contain  "global variables"
+ * use this file  to define  "global variables"
  */
-export class G{
-	private static instance:G 
-	private constructor() {
-	}
-	public static getInstance(){
-		if(!this.instance){    
-			this.instance = new G();
+
+interface DocumentObj{
+	fileCst:fileCst
+	graph:Graph
+	optable:optable
+}
+
+let g={
+	x:"123",
+	DocumentManager: new Map<DocumentUri,DocumentObj>(),
+	PrologLibPath : (() => {
+		if (process.platform === "win32") {
+			let swiplPath = child_process.execSync("where.exe swipl").toString()
+			const swiplHomePath = swiplPath.split("\\").slice(0, -2)
+			return path.join(...swiplHomePath, "library")
 		}
-		return this.instance;
-	}
-	
-	/** 
-	 * fileStateMap 用来根据DocumentUri 来确定fileState
-	 */
-	fileStateMap: Map<DocumentUri, FileState> = new Map()
+	})()
 
 }

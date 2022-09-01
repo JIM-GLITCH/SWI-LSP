@@ -4,19 +4,18 @@ import { URI } from "vscode-uri"
 import { DocumentUri, Location, Position, Range } from 'vscode-languageserver'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { AtomNode, FunctorNode, InfixOpArgNode, Node, PrefixOpArgNode, Semantic } from './astNode'
-import { Graph } from './graph'
-import { OpTable } from './op_table'
-import { PrologLibPath, validateTextDocument} from"./server"
-import { InputStream, read_tokens } from './lexer'
+import { Graph } from '../server/src/graph'
+import { OpTable } from '../server/src/op_table'
+import {  validateTextDocument} from"../server/src/server"
+import { InputStream, read_tokens } from '../server/src/lexer'
 import {Parser}from "./parser"
-import { pushError } from './pushDiagnostic'
-import {G} from "./globalVars"
-import { AST } from './AST'
+import { pushError } from '../server/src/pushDiagnostic'
+import {g} from "../server/src/globalVars"
+import { AST } from '../server/src/AST'
 // import { URI } from 'vscode-uri'
 export {FileState}
 
-const g = G.getInstance()
-const fileStateMap = g.fileStateMap;
+const fileStateMap = new Map();
 class FileState {
 	importedFileSet:Set<String>
 	uri:DocumentUri
@@ -101,7 +100,7 @@ class FileState {
 			}
 		}
 
-		return path.join(PrologLibPath!,...names.reverse())
+		return path.join(g.PrologLibPath!,...names.reverse())
 		
 	}
 }

@@ -1,6 +1,5 @@
 import { integer } from 'vscode-languageserver';
-import { ClauseNode, FunctorNode, PrefixOpArgNode,Node, ListNode, IntegerNode, AtomNode } from './astNode'
-import { pushError } from './pushDiagnostic'
+import { clause, } from '../server/src/cst'
 export { OpTable};
 
 class OpTable{
@@ -70,8 +69,8 @@ class OpTable{
 		}
 	}
 
-	tryChangeOpTable(node:ClauseNode){
-		const termNode = node.term;
+	tryChangeOpTable(node:clause){
+		const termNode = node.Term;
 		if (this.topLevelNode(termNode)){
 			const argNode = (termNode as PrefixOpArgNode).arg;
 			this.tryOpThreeNode(argNode);

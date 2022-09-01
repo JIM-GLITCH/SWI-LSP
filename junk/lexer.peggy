@@ -1,7 +1,4 @@
-// Simple Arithmetics Grammar
-// ==========================
-//
-// Accepts expressions like "2 * (3 + 4)" and computes their value.
+/*run "peggy lexer.peggy"*/
 {{
 	function debug(){
 	console.time("debug");
@@ -87,7 +84,7 @@ OneToken =
 		token.fullRange=getRange();
 		return token;
 	}
-atom =atom_token{return buildToken(kind.atom)};
+atom =atom_token{return       (kind.atom)};
 end = end_token{return buildToken(kind.end)};
 variable  = variable_token{return buildToken(kind.variable)};
 integer = integer_token{return buildToken(kind.integer)};
@@ -122,7 +119,7 @@ atom_token =
 		/semicolon_token
 		/cut_token
 
-letter_digit_token=[a-z]+
+letter_digit_token=[a-z] alphanumeric_char*;
 
 graphic_token= !end_token graphic_token_char+
 end_token= "." & ( layout_char/ "%" / EOF)

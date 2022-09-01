@@ -1,3 +1,9 @@
+import {match,P}from "ts-pattern"
+type Posn = {
+	line:number,
+	char:number,
+	offset:number
+}
 interface token {
 
 }
@@ -9,28 +15,57 @@ class Lexer {
 	line: number
 	char: number
 	offset: number
+    varSet: Set<string>
 	
 	constructor(text="",line=0,char = 0,offset = 0){
 		this.text=text
 		this.line=  line
 		this.char = char
 		this.offset=offset
+        this.varSet=new Set()
 	}
 
 
 	readFullStop(){
+		return match(this.getChar())
+			.with("","\x1A",()=>{
+				return K.end
+			})
+			.otherwise(x=>{
+				if(x<" "){
+					return K.end
+				}
+				return this.readSymbol()
+				
+			})
+			
 
+	}
+
+	readSymbol() {
+		while(1){
+			const ch = this.lookChar()
+			match(ch)
+				.with("#","$","&","*","+","-",".","/",":","<","=",">","?","@","\\","^","`","~",
+				()=>{
+					this.consume(ch)
+				}
+				).otherwise(()=>{})
+		}
+		return K.atom;
 	}
 	/**  
 	 * consume  chars of a clause
 	 */
-	produceTokenList(): token[] | undefined {
+	getTokenList(): token[] | undefined {
 		if (this.eos())
 			return undefined
+
+		
 		const tokenList: token[] = []
 		for (; ;) {
-			const token = this.produceToken()
-			if (!token) {
+			const token = this.getToken()
+			if (token ==false) {
 				break
 			}
 			tokenList.push(token)
@@ -42,30 +77,28 @@ class Lexer {
 	/**
 	 * consume chars of a token
 	 */
-	produceToken() {
+	getToken() {
 		const layoutStartPos = this.savePos()
-		const hasLeadingLayout = this.produceLayout()
+		const hasLeadingLayout = this.getLayout()
 		const tokenStartPos = this.savePos()
-		const token = this.producePartialToken()
-
-		
+		const tag = this.getPartialToken()
+		if(!tag){
+			return false;
+		}
+		const val = this.text.substring(tokenStartPos.offset,this.offset)
+		let token = {tag,val,layoutStartPos,hasLeadingLayout,tokenStartPos}
+		return token
 
 	}
 
-	producePartialToken(){
+	getPartialToken():K|false{
 		const pos = this.savePos()
-		const ch = this.produceChar()
+		const ch = this.getChar()
 		switch (ch) {
 			case "":
 				return false;
-			// case "%":
-			// 	/* %comment line comment */
-			// 	for(;;){
-			// 		const ch = this.produceChar()
-			// 		if(ch == "\n" ||ch == ""){
-			// 			return true;
-			// 		}
-			// 	}
+			case "\x1A":
+				return false;
 			case "!":
 				return K.atom
 			case "(":
@@ -89,22 +122,86 @@ class Lexer {
 			case ".":
 				return this.readFullStop()
 			case "\"":
-				return readString("\"")
+				this.readString("\"")
+				return K.string
 			case "'":
-				return readString("'")
+				this.readString("'")
+				return K.atom
 			default:
 				break;
 		}
 		if(ch == "_" || (ch>="A"&&ch<="Z")){
-			
+			this.readName();
+			const name = this.text.substring( pos.offset,this.offset)
+			if(name =="_"){
+			}
+            else{
+                this.varSet.add(name)
+            }
+            return K.variable;
 		}
+        else if(ch>='0' || ch<='9'){
+            this.readInteger(ch)
+            return K.integer;
+        }
+	}
+    readInteger(ch:string) {
+        const base = Number(ch)
+        const ch2 = this.lookChar()
+        if(ch2 == ""){
+            return false;
+        }
+        this.consume(ch2)
+        if(ch2!="'"){
+            return readDigits()
+        }
+        else if(base>=1){
+            return readDigits()
+        }
+        else{
+            
+        }
+    }
+    readName() {
+        while(1){
+            let Char =this.lookChar()
+            if((Char >= "a"&& Char <="z") //a..z
+            || (Char >= "A"&& Char <= "Z")//A..Z
+            || (Char >= "0"&& Char <= "9")){//0..9
+                this.consume(Char)
+            }
+            else{
+                break
+            }
+        }
+    }
+	readString(quote: string):void {
+		return match(this.getChar())
+			.with("",()=>{
+				console.log(`! end of file in ${quote}`)
+				return 
+			})
+			.with(quote,()=>{
+				/*  more string */ 
+				return match(this.lookChar())
+					/* double quote */
+					.with(quote,()=>{
+						this.consume(quote)
+						return this.readString(quote)
+					})
+					/* end */
+					.otherwise(()=>{})
+			})
+			.otherwise(()=>{
+				return this.readString(quote)
+			})
 	}
 
-	produceLayout(){
+	getLayout(){
 		return this.oneMore(this.layoutText)
 	}
 
-	produceChar(){
+	getChar(){
 		const char = this.text[this.offset]
 		this.consume(char)
 		return char
@@ -200,18 +297,19 @@ class Lexer {
 	}
 
 	/* 位置控制函数  */
-	savePos():[number,number,number]{
-		return [
-			this.line,
-			this.char,
-			this.offset
-		]
+
+	savePos():Posn{
+		return {
+			line:this.line,
+			char:this.char,
+			offset:this.offset
+		}
 	}
 	
-	loadPos(pos:[number,number,number]){
-		this.line=pos[0]
-		this.char=pos[1]
-		this.offset=pos[2]
+	loadPos(pos:Posn){
+		this.line=pos.line
+		this.char=pos.char
+		this.offset=pos.offset
 	}
 	/* 字符 函数 */
 	layoutChar(){
