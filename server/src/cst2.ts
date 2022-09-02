@@ -1,6 +1,7 @@
 
 import { Token } from 'moo'
 import { Diagnostic, DiagnosticSeverity, Position, Range } from 'vscode-languageserver'
+import { index } from '.'
 import { type Graph } from './graph'
 import { tokenList } from './lexer-by-moo'
 import { optable } from './operators'
@@ -19,7 +20,9 @@ export {
 	list,
 	tokenRange,
 	dict,
-	Args
+	Args,
+	AnalyseCtx,
+	Atom
 }
 /**Sematic level */
 const enum S {
@@ -34,10 +37,11 @@ const enum S {
 }
 
 interface AnalyseCtx{
-	callerNode:CstNode
+	callerNode?:CstNode
 	graph:Graph
 	optable:optable
 	diagnostics:Diagnostic[]
+	clause:clause
 }
 
 interface CstNode{
@@ -333,12 +337,14 @@ class TwoTokenToOne implements Token{
 		return this.tk1.lineBreaks + this.tk2.lineBreaks
 	}
 
-}
+}  
 
 
 class clause {
-	async analyse(ctx:any) {
-		term_expansion(this.term,ctx)
+	async analyse(ctx:AnalyseCtx) {
+		if(this.term){
+			index(this.term,ctx);
+		}    
 	}
 	
 	search(pos: Position):CstNode|undefined {

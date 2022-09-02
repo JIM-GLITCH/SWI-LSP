@@ -45,7 +45,12 @@ class MyParser{
 		let graph = new Graph();
 		for(let clause of this){
 			if(!!clause){
-				await clause.analyse({graph:graph,optable:this.optable});
+				await clause.analyse({
+					graph:graph,
+					optable:this.optable,
+					diagnostics:this.diagnostics,
+					clause:clause
+				});
 				clauses.push(clause);
 			}
 		}
