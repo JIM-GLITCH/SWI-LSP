@@ -2,14 +2,14 @@
 import { mylexer, tokenList } from './lexer-by-moo';
 import {match,P} from "ts-pattern"
 import { LexerState, Token } from 'moo'
-import { compound, prefix_compound,infix_compound,postfix_compound, Negetive, clause ,CstNode, Atomic, fileCst, list, tokenRange, dict, Args} from './cst2'
+import { Compound, prefix_compound,infix_compound,postfix_compound, Negetive, clause ,CstNode, Atomic, fileCst, List, tokenRange, dict, Args, AnalyseCtx} from './cst2'
 // import { OpTable } from './op_table'
 import{optable} from "./operators";
 import { content } from './text';
 import { Flag as F } from './context_flags'
 import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver'
 import { Graph } from './graph'
-import {error} from"./pushDiagnostic"
+import {error, warning} from"./pushDiagnostic"
 export{MyParser}
 interface infixop{
 	lPrec:number;
@@ -45,12 +45,14 @@ class MyParser{
 		let graph = new Graph();
 		for(let clause of this){
 			if(!!clause){
-				await clause.analyse({
+				let ctx:AnalyseCtx = {
 					graph:graph,
 					optable:this.optable,
 					diagnostics:this.diagnostics,
 					clause:clause
-				});
+				}
+				await clause.analyse(ctx);
+				clause.callerNode = ctx.callerNode
 				clauses.push(clause);
 			}
 		}
@@ -93,7 +95,7 @@ class MyParser{
 			return Rest;
 		}
 		let tk =S.tokens[S.idx-1];
-		this.diagnostics.push(error(tokenRange(tk),`${tokenString} expected after expression `));
+		error(tokenRange(tk),`${tokenString} expected after expression `,this);
 		// syntax_error([Token,or,operator,expected], S0).
 		return ;
 	}
@@ -145,7 +147,7 @@ class MyParser{
 					yield *this.exprtl0(S, new dict(token2,nodes), Prec, ctx)
 				}
 				else if(token2?.value=="{}"){
-					yield *this.exprtl0(S3, new dict(token2, []), Prec, ctx);
+					yield *this.exprtl0(S3, new dict(token2, [new Atomic(token1)]), Prec, ctx);
 				}
 				yield * this.exprtl0(S2,new Atomic(token1),Prec,ctx);
 				return;
@@ -166,7 +168,7 @@ class MyParser{
 						if(!r2){
 							return undefined;
 						}
-						let Term = new compound(token1,r2.args);
+						let Term = new Compound(token1,r2.args);
 						yield* this.exprtl0(r2.S,Term,Prec,ctx);
 						
 					}
@@ -201,7 +203,7 @@ class MyParser{
 						if(!r){
 							return undefined;
 						}
-						let node = new list(token1,[r.Answer],'[|]');
+						let node = new List(token1,[r.Answer],'[|]');
 						let r2 = this.read_list(r.S,node,0);
 						
 						if(!r2){
@@ -256,7 +258,7 @@ class MyParser{
 							return undefined;
 						}
 						token1.value ="{}";
-						yield* this.exprtl0(S3,new compound(token1,[r.Answer]),Prec,ctx);
+						yield* this.exprtl0(S3,new Compound(token1,[r.Answer]),Prec,ctx);
 						token1.value =token1.text;
 					}
 					return
@@ -265,7 +267,7 @@ class MyParser{
 				yield* this.exprtl0(S2,new Atomic(token1),Prec,ctx);
 				return
 			default:
-				this.diagnostics.push(error(tokenRange(token1),`${token1.text} cannot start an expression`));
+				error(tokenRange(token1),`${token1.text} cannot start an expression`,this);
 				// syntax_error([Token,cannot,start,an,expression],
 		}
 	}
@@ -300,7 +302,7 @@ class MyParser{
 		if(token1.text=="}"){
 			return S2;
 		}
-		this.diagnostics.push(error(tokenRange(token1),'`,` or `}` expected in arguments'));
+		error(tokenRange(token1),'`,` or `}` expected in arguments',this);
 		return ;
 	}
 	read_KV(S3:TokenIter,ctx:number,nodes:CstNode[]){
@@ -340,12 +342,12 @@ class MyParser{
 			return {S:S2,args:args,close:token1};
 		}
 		let tk = token1??S1.tokens[S1.idx-1];
-		this.diagnostics.push(error(tokenRange(tk),`', or )' expected in arguments`));
+		error(tokenRange(tk),`', or )' expected in arguments`,this);
 		// syntax_error([', or )',expected,in,arguments], S).
 		
 	}
 
-	read_list(S1:TokenIter,node:compound,ctx:number):{S:TokenIter,endToken:Token}|undefined{
+	read_list(S1:TokenIter,node:Compound,ctx:number):{S:TokenIter,endToken:Token}|undefined{
 		let S2 = S1.next();
 		let token1 = S1.val();
 		// if(!token1){
@@ -361,7 +363,7 @@ class MyParser{
 					if(!r){
 						return undefined;
 					}
-					let node2 =new list(token1,[r.Answer],"[|]");
+					let node2 =new List(token1,[r.Answer],"[|]");
 					node.args.push(node2);
 					return this.read_list(r.S,node2,ctx);
 
@@ -388,7 +390,7 @@ class MyParser{
 		
 			default:
 				let tk = token1??S1.tokens[S1.idx-1];
-				this.diagnostics.push(error(tokenRange(tk),`['  | or ]' expected in list]`));
+				error(tokenRange(tk),`['  | or ]' expected in list]`,this);
 				//syntax_error([', | or ]',expected,in,list], S).
 				break;
 		}
@@ -402,8 +404,8 @@ class MyParser{
 		
 		{
 			if(Prec<Oprec){
-				let tk = token1??S1.tokens[S1.idx-1];
-				this.diagnostics.push(error(tokenRange(tk),`prefix operator ${Op.text} in context with precedence ${Prec}`));
+				let tk = S1.tokens[S1.idx-1];
+				warning(tokenRange(tk),`prefix operator ${Op.text} in context with precedence ${Prec}`,this);
 			// syntax_error([prefix,operator,Op,in,context,
 			// 	with,precedence,Precedence], S0).
 			 //error_recory??
@@ -544,7 +546,7 @@ class MyParser{
 		let r = this.cant_follow_expr(token0);
 		if(r){
 			// syntax_error([Culprit,follows,expression], [Thing|S1]).
-			this.diagnostics.push(error(tokenRange(token0),`${r} follows expression`));
+			error(tokenRange(token0),`${r} follows expression`,this);
 			return
 			
 		}

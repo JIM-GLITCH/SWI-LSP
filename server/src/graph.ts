@@ -1,17 +1,17 @@
 
-import { CstNode } from "./cst2"
+import { AnalyseCtx, clause, CstNode } from "./cst2"
 export{Graph}
 /**One document corresponds to one graph */
 type name = string  
 class Graph{
 	/** */
 	nodesSet: Set<any>
-	referencesMap: Map<name, Set<CstNode>|undefined>
-	definitionsMap: Map<name, Set<CstNode>|undefined>
+	referencesMap: Map<name, Set<CstNode> >
+	definitionsMap: Map<name, Set<clause> >
 	/** ` called name -> caller name -> callednodes`*/
-	incomingCallsMap:Map<name,Map<name,Set<CstNode>|undefined>|undefined>
+	incomingCallsMap:Map<name,Map<name,Set<CstNode> > >
 	/** ` caller name -> called name -> callednodes` */
-	outgoingCallsMap:Map<name,Map<name,Set<CstNode>|undefined>|undefined>
+	outgoingCallsMap:Map<name,Map<name,Set<CstNode> > >
 	constructor(){    
 		this.nodesSet = new Set();
 		this.referencesMap = new Map();
@@ -19,10 +19,7 @@ class Graph{
 		this.incomingCallsMap= new Map();
 		this.outgoingCallsMap = new Map();		
 	}
-	getDefinations(node:CstNode|undefined){
-		if(!node){
-			return[];
-		}
+	getDefinations(node:CstNode){
 		return this.definitionsMap.get(node.name)??[]
 	}
 
@@ -38,16 +35,16 @@ class Graph{
 		return this.outgoingCallsMap.get(callerNode.name)
 	}
 
-	addDefinition(node:CstNode){
-		let  name = node.name
+	addDefinition(node:CstNode,ctx:AnalyseCtx){
+		let  name = node.name;
+		let clause = ctx.clause;
 		const set = this.definitionsMap.get(name);
 		set
-		?	set.add(node)
-		:	this.definitionsMap.set(name,new Set([node]));
-		this.addReference(node)
+		?	set.add(clause)
+		:	this.definitionsMap.set(name,new Set([clause]));
 	}
 
-	addReference(node:CstNode){
+	addReference(node:CstNode,ctx:AnalyseCtx){
 		let name = node.name
 		const set = this.referencesMap.get(name);
 		set
@@ -87,14 +84,14 @@ class Graph{
 		this.addIncomingCall(calledNode,callerNode)
 		return this.addOutgoingCall(callerNode,calledNode)
 	}
-	delDefination(name:string,node:CstNode){
-		const set = this.definitionsMap.get(name);
-		set?.delete(node);
-		if(set?.size == 0)
-			this.definitionsMap.delete(name);
-		this.delReference(name,node)
+	// delDefination(name:string,node:CstNode){
+	// 	const set = this.definitionsMap.get(name);
+	// 	set?.delete(node);
+	// 	if(set?.size == 0)
+	// 		this.definitionsMap.delete(name);
+	// 	this.delReference(name,node)
 	
-	}
+	// }
 
 	delReference(name:string,node:CstNode){
 		const set = this.referencesMap.get(name);

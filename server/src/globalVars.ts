@@ -4,7 +4,9 @@ import  child_process =require("child_process");
 import { Graph } from './graph'
 import { optable } from './operators'
 import { fileCst } from './cst2'
-export{g};
+export{g,
+	DocumentObj
+};
 /**
  * use this file  to define  "global variables"
  */

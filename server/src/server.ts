@@ -14,9 +14,9 @@ import {
 	CompletionItem,
 	CompletionItemKind, createConnection, Diagnostic, DidChangeConfigurationNotification, DocumentSymbol, InitializeParams, InitializeResult, Location, LocationLink, Position, ProposedFeatures, Range, ResponseError, SelectionRange, SymbolInformation, SymbolKind, TextDocumentIdentifier, TextDocumentPositionParams, TextDocuments, TextDocumentSyncKind
 } from 'vscode-languageserver/node'
-import { g} from "./globalVars"
+import { DocumentObj, g} from "./globalVars"
 import { MyParser } from './parser-on-moo'
-import { compound, CstNode, fileCst, isCstBranchNode,infix_compound, Atomic } from './cst2'
+import { Compound, CstNode, fileCst, isCstBranchNode,infix_compound, Atomic, clause, tokenRange } from './cst2'
 import { match } from 'ts-pattern'
 export {
 	validateTextDocument
@@ -62,7 +62,7 @@ connection.onInitialize((params: InitializeParams) => {
 			documentSymbolProvider: true,
 			definitionProvider: true,
 			hoverProvider: true,
-			referencesProvider: false,
+			referencesProvider: true,
 			callHierarchyProvider: {
 
 			},
@@ -160,13 +160,13 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 // (new Parser(fileState)).parseTextWithState(text)
 	let parser =new MyParser();
 	parser.reset(text);
-	let docmentObj =await parser.parse();
+	let documentObj =await parser.parse();
 	// while(!DocumentManager.get(uri)){
 	// 	await sleep(1000);
 	// }
 	// doc = DocumentManager.get(uri);
 	// doc.fileCst = fileCst;
-	DocumentManager.set(uri,docmentObj)
+	DocumentManager.set(uri,documentObj)
 
 
 	// Send the computed diagnostics to VSCode.
@@ -209,40 +209,24 @@ const sleep = (ms: number) => {
 
 connection.onDocumentSymbol(async (_params)=>{
 	const uri = _params.textDocument.uri
-	let fileCst:fileCst|undefined;
-	while (!(fileCst = DocumentManager.get(uri)?.fileCst)){
+	let documentObj:DocumentObj|undefined;
+	while (!(documentObj = DocumentManager.get(uri))){
 		await sleep(100);
 	}
-	let Symbols: DocumentSymbol[]  = [];
-	let prev_name ="";
-	for (let i = 0; i < fileCst.length; i++) {
-		const clause = fileCst[i];
-		let term =clause.term
-		let name="";
-		let range =clause.getRange();
-		let selectionRange =Range.create({line:0,character:1},{line:0,character:1});
-		if(term){
-			match(term)
-			.with({value:":-",type:"infix_compound"},(term:infix_compound)=>{
-				let lArg =term.lArg;
-				name=isCstBranchNode(lArg) ? lArg.value+'/'+lArg.args.length : lArg.value;
-				selectionRange=lArg.getRange();
-			})
-			.with({type:"infix_compound"}, {type:"compound"},(term:infix_compound)=>{
-				name=  term.value+'/'+term.args.length;
-				range=term.getRange();
-				selectionRange=term.getRange();
-			})
-			.with({type:"Leaf"},(term:Atomic)=>{
-				name = term.value;
-				selectionRange = term.getRange();
-			})
-			.otherwise(()=>{})
-		}
-		if(name!=prev_name){
-			Symbols.push({name,range,selectionRange,kind:SymbolKind.Function})
-		}
-	}
+	let graph = documentObj.graph;
+	let Symbols:  DocumentSymbol[] = [];
+	graph.definitionsMap.forEach((set,name)=>{
+		let clause = set.values().next().value as clause;
+		let range = clause.getRange();
+		let kind = SymbolKind.Function;
+		let selectionRange = tokenRange(clause.callerNode!.token);
+		Symbols.push({
+			name,
+			range,
+			kind,
+			selectionRange
+		})
+	})
 	return Symbols;
 
 })
@@ -290,14 +274,18 @@ connection.onDefinition(async (_params) => {
 		await sleep(100)
 	}
 	const node = fileCst.search(position)
+	if(!node){
+		return [];
+	}
 	const graph = DocumentManager.get(uri)?.graph!
 	const definitions: LocationLink[] = []
 	let nodeSet = graph.getDefinations(node);
-	nodeSet.forEach((x) => {
+	nodeSet.forEach((clause) => {
 		let originSelectionRange=node?.getRange();
 		let targetUri=uri;
-		let	targetRange=x.getRange();
-		let targetSelectionRange= x.getRange();
+		let	targetRange=clause.getRange();
+		let token = clause.callerNode!.token;
+		let targetSelectionRange= tokenRange(token);
 		definitions.push({
 			originSelectionRange,
 			targetUri,
@@ -309,44 +297,45 @@ connection.onDefinition(async (_params) => {
 })
 
 
-// connection.onReferences(async (_params) => {
-// 	const position = _params.position
-// 	const uri = _params.textDocument.uri
-// 	let ast: AST | undefined
-// 	while (!(ast = fileStateMap.get(uri)?.ast)) {
-// 		await sleep(100)
-// 	}
-// 	const node = ast.search(position)
-// 	const name = node?.name
-// 	const state = fileStateMap.get(uri)
-// 	if (!name)
-// 		return []
-// 	const references: Location[] = []
-// 	/* search in the same file */
-// 	state?.graph.getReferences(name).forEach((x) => {
-// 		references.push({
-// 			uri: uri,
-// 			range: x.range
-// 		})
-// 	})
-// 	/* search in imported module*/
-// 	for (const _uri of state?.importedFileSet ?? []) {
+connection.onReferences(async (_params) => {
+	const position = _params.position
+	const uri = _params.textDocument.uri
+	let fileCst: fileCst | undefined
+	while (!(fileCst = DocumentManager.get(uri)?.fileCst)) {
+		await sleep(100)
+	}
+	const node = fileCst.search(position)
+	if(!node){
+		return [];
+	}
+	const graph = DocumentManager.get(uri)?.graph!
+	const references: Location[] = []
+	/* search in the same file */
+	graph.getReferences(node).forEach((x) => {
+		let range=tokenRange(x.token);
+		references.push({
+			uri,
+			range
+		})
+	})
+	// /* search in imported module*/
+	// for (const _uri of state?.importedFileSet ?? []) {
 
-// 		let fileState: FileState | undefined
-// 		let uri = _uri as string
-// 		while (!(fileState = fileStateMap.get(uri))) {
-// 			await sleep(100)
-// 		}
-// 		/* search in the imported file */
-// 		fileState?.graph.getReferences(name).forEach((x) => {
-// 			references.push({
-// 				uri: uri,
-// 				range: x.range
-// 			})
-// 		})
-// 	}
-// 	return references
-// })
+	// 	let fileState: FileState | undefined
+	// 	let uri = _uri as string
+	// 	while (!(fileState = fileStateMap.get(uri))) {
+	// 		await sleep(100)
+	// 	}
+	// 	/* search in the imported file */
+	// 	fileState?.graph.getReferences(name).forEach((x) => {
+	// 		references.push({
+	// 			uri: uri,
+	// 			range: x.range
+	// 		})
+	// 	})
+	// }
+	return references
+})
 
 
 connection.onHover(async (_params) => {
@@ -356,32 +345,24 @@ connection.onHover(async (_params) => {
 	while(!(fileCst = DocumentManager.get(uri)?.fileCst!)){
 		await sleep(100);
 	}
-	// TODO remove try catch and find the problem
-	try{
+	// DONE: remove try catch and find the problem
+	
 	const node:CstNode|undefined = fileCst.search(pos)
 	if(!node){
-		return {
-			contents: "unknown",
-			range: undefined
-		}
-	}
-	if(isCstBranchNode(node)){
-		return {
-			contents:node.name,
-			range:node.getRange(),
-			
-		}
+		return undefined
 	}
 	return {
-		contents:node.value,
+		contents:{
+			kind:"markdown",
+			value:`\`\`\`prolog
+${node.name}
+\`\`\`
+`
+
+		},
 		range:node.getRange()
 	}
-	}catch {
-		return {
-			contents: "unknown",
-			range: undefined
-		}
-	}
+
 })
 
 

@@ -1,13 +1,14 @@
 
 import { Token } from 'moo'
 import { Diagnostic, DiagnosticSeverity, Position, Range } from 'vscode-languageserver'
-import { index } from '.'
+import { index } from './indexer'
 import { type Graph } from './graph'
 import { tokenList } from './lexer-by-moo'
 import { optable } from './operators'
 import {error} from "./pushDiagnostic"
+import { isList } from './utils'
 export {
-	Compound as compound,
+	Compound,
 	prefix_compound,
 	infix_compound,
 	postfix_compound,
@@ -17,7 +18,7 @@ export {
 	Atomic as Atomic ,
 	fileCst,
 	isCstBranchNode,
-	list,
+	List,
 	tokenRange,
 	dict,
 	Args,
@@ -82,66 +83,11 @@ class Atomic implements CstNode {
 	getRange(){
 		return tokenToRange(this.startToken,this.endToken)
 	}
-	analyse(level: number, ctx: AnalyseCtx): void {
-		switch (level) {
-			case S.TopLevel:
-				break
-			case S.RuleHead:
-
-				break;
-			case S.RuleBody:
-
-				break;
-			case S.DCGHead:
-
-				break;
-			case S.DCGBody:
-
-				break;
-			case S.Arg:
-
-				break;
-			default:
-				break;
-		}
-	}
 }
 
 class Atom extends Atomic{
 	constructor(token:Token,value?:string){
 		super(token,value);
-	}
-	analyse(level: number, ctx: AnalyseCtx): void {
-		switch (level) {
-			case S.TopLevel:
-				// a.
-				ctx.graph.addDefinition(this)
-				break
-			case S.RuleHead:
-				//  a:- xxx.
-				ctx.callerNode = this;
-				ctx.graph.addDefinition(this)
-				break;
-			case S.RuleBody:
-				// xxx :- a.
-				ctx.graph.addReference(this)
-				break;
-			case S.DCGHead:
-				// a -> xxx.
-				ctx.callerNode = this
-				ctx.graph.addDefinition(this)
-				break;
-			case S.DCGBody:
-				// xxx-> a.
-				ctx.graph.addReference(this)
-				break;
-			case S.Arg:
-				// xxx(a).
-				ctx.graph.addReference(this)
-				break;
-			default:
-				break;
-		}
 	}
 }
 
@@ -159,15 +105,13 @@ interface search{
 }
 
 
-function islist(x:unknown):x is list {
-	return typeof x =='object' && !!x && "refreshEndToken" in x;
-	
-}
+
 
 class Compound  implements CstBranchNode {
 	/**sematic level */
 	level!:number
 	name: string
+	clause!: clause
 	search(pos:Position):CstNode|undefined{
 		return checkFunctorRange(pos,this,undefined,this.args)
 	}
@@ -182,7 +126,7 @@ class Compound  implements CstBranchNode {
 		this.args = new Args(...args)
 		this.value = funcVal?funcVal:functor.value;
 		this.startToken = functor
-		this.endToken = args[args.length-1].endToken;
+		this.endToken = args[args.length-1]?.endToken??this.token;
 		this.name = this.value+'/'+this.args.length;
 	}
 	getRange():Range{
@@ -190,14 +134,17 @@ class Compound  implements CstBranchNode {
 	}
 }
 
-class list extends Compound{
+class List extends Compound{
 	constructor(functor: Token, args: CstNode[],funcVal?:string) {
 		super(functor,args,funcVal);
+		// patch
+		this.name ="[|]/2";
 	}
+	/**patch */ 
 	refreshEndToken(endtoken:Token):undefined{
 		this.endToken = endtoken;
 		let node = this.args[this.args.length-1]
-		if(islist(node)){
+		if(isList(node)){
 			return node.refreshEndToken(endtoken);
 		}
 	}
@@ -205,9 +152,7 @@ class list extends Compound{
 
 
 class prefix_compound extends Compound {
-	type = "prefix_compound"
-	level!: number;
-	name!:string
+	type = "prefix_compound";
 	constructor(functor: Token, args: CstNode[],funcVal?:string) {
 		super(functor,args,funcVal);
 	}
@@ -273,7 +218,7 @@ class dict extends Compound{
 		this.token=token;
 		this.tag=nodes[0];
 		this.startToken=nodes[0].startToken;
-		this.endToken=nodes[nodes.length-1]?.endToken??nodes[0].endToken;
+		this.endToken=nodes[nodes.length-1]?.endToken??this.token;
 		this.args=new Args(...nodes)
 	}
 	search(pos: Position): CstNode | undefined {
@@ -341,6 +286,7 @@ class TwoTokenToOne implements Token{
 
 
 class clause {
+	callerNode?: CstNode
 	async analyse(ctx:AnalyseCtx) {
 		if(this.term){
 			index(this.term,ctx);

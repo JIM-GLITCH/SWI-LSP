@@ -1,3 +1,7 @@
+
+import { AnalyseCtx, CstNode } from './cst2'
+import {error} from "./pushDiagnostic"
+import { isAtom, isInteger, isList } from './utils'
 export{optable}
 class optable{
 	default_table=default_table;
@@ -14,7 +18,12 @@ class optable{
 			return prec;
 		return undefined;	
 	}
-	op(prec:number,type:string,name:string){
+	op(precNode:CstNode,typeNode:CstNode,nameNode:CstNode,ctx:AnalyseCtx){
+		let tmp={};
+		if(!check(precNode,typeNode,nameNode,tmp,ctx)){
+			return;
+		}
+		let {name , type , prec }= tmp;
 		switch (name){
 			case ",":
 			case "|":
@@ -115,3 +124,30 @@ const opTypeSet = new Set(["fx"
 	, "xfy"
 	, "yfx"
 	, "xfx"]);
+interface tmp{
+	prec:number;
+	type:string;
+	name:string;
+}
+function check(precNode: CstNode, typeNode: CstNode, nameNode: CstNode, tmp: any, ctx: AnalyseCtx): tmp is tmp {
+	let prec = Number(precNode.value);
+	if(!isInteger(precNode)||prec>1200||prec<0 ){
+		error(precNode.getRange(),` Type error: \`integer' expected between 0 and 1200`,ctx);
+		return false;
+	}
+	tmp.prec = prec;
+
+	let type = typeNode.value;
+	if(!isAtom(typeNode) || !(opTypeSet.has(type))){
+		error(typeNode.getRange(),` Type error: \`atom' expected fy fx yf xfy yfx xfx `,ctx );
+		return false;
+	}
+	tmp.type = type;
+
+	if(isAtom(nameNode)){
+		let name = nameNode.value;
+		tmp.name =name;
+		return true;
+	}
+	return false;
+}
