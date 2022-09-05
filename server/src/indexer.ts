@@ -1,6 +1,13 @@
-import { AnalyseCtx, Atom, Compound, CstNode } from './cst2'
+import { AnalyseCtx, Atom, Compound, CstNode,List } from './cst2'
+import { g } from './globalVars'
 import { error } from './pushDiagnostic';
+import fs =require("fs");
+import path = require('path')
+import {URI} from "vscode-uri"
+import { MyParser } from './parser-on-moo'
+import { check,  isList } from './utils'
 export{index};
+
 function index(node:CstNode,ctx:AnalyseCtx) {
 	switch (node.name) {
 		case ":-/1":{
@@ -23,7 +30,7 @@ function index(node:CstNode,ctx:AnalyseCtx) {
 		
 		case ":/2":{
 			let node2 = node as Compound;
-			indexArgs(node2.args[0],ctx);
+			addRefAndIndexArg(node2.args[0],ctx);
 			DCGBody(node2.args[1],ctx);
 			return ;
 		}
@@ -38,7 +45,7 @@ function ruleHead(node:CstNode,ctx:AnalyseCtx) {
 	switch (node.name) {
 		case ":/2":{
 			let n = node as Compound;
-			indexArgs(n.args[0],ctx);
+			addRefAndIndexArg(n.args[0],ctx);
 			ruleHead(n.args[1],ctx);
 			return ;
 		}
@@ -48,7 +55,7 @@ function ruleHead(node:CstNode,ctx:AnalyseCtx) {
 	}
 	addDefinition(node,ctx);
 	ctx.callerNode =node;
-	indexArgs(node,ctx);
+	addRefAndIndexArg(node,ctx);
 }    
 function ruleBody(node:CstNode,ctx:AnalyseCtx){
 	switch (node.name) {
@@ -69,13 +76,13 @@ function ruleBody(node:CstNode,ctx:AnalyseCtx){
 		}
 		case ":/2":{
 			let nd = node as Compound;
-			indexArgs(nd.args[0],ctx);
+			addRefAndIndexArg(nd.args[0],ctx);
 			ruleBody(nd.args[0],ctx);
 			break;
 		}
 		default:{
 			addReference(node,ctx);
-			indexArgs(node,ctx);
+			addRefAndIndexArg(node,ctx);
 			
 			break;
 		}
@@ -92,7 +99,7 @@ function DCGHead(node:CstNode,ctx:AnalyseCtx) {
 		}
 		case ":/2":{
 			let node2 = node as Compound;
-			indexArgs(node2.args[0],ctx);
+			addRefAndIndexArg(node2.args[0],ctx);
 			DCGHead(node2.args[1],ctx);
 			return;
 		}
@@ -103,7 +110,7 @@ function DCGHead(node:CstNode,ctx:AnalyseCtx) {
 	dcg_extend(node);
 	ctx.callerNode =node;
 	addDefinition(node,ctx);
-	indexArgs(node,ctx);
+	addRefAndIndexArg(node,ctx);
 }
 
 function dcg_extend(node:CstNode) {
@@ -115,10 +122,10 @@ function dcg_extend(node:CstNode) {
 	}
 }
 
-function indexArgs(node:CstNode,ctx:AnalyseCtx) {
+function addRefAndIndexArg(node:CstNode,ctx:AnalyseCtx) {
 	addReference(node,ctx);
 	if(isCompound(node)){
-		node.args.forEach(x=>indexArgs(x,ctx));
+		node.args.forEach(x=>addRefAndIndexArg(x,ctx));
 	}
 }
 function isCompound(node:CstNode): node is Compound {
@@ -144,22 +151,22 @@ function DCGBody(node:CstNode,ctx:AnalyseCtx){
 
 		case ":/2":{
 			let nd = node as Compound;
-			indexArgs(nd.args[0],ctx);
+			addRefAndIndexArg(nd.args[0],ctx);
 			DCGBody(nd.args[1],ctx);
 			break;
 		}
 
 		case "[|]/2":{
 			let nd = node as Compound;
-			indexArgs(nd.args[0],ctx);
-			indexArgs(nd.args[1],ctx);
+			addRefAndIndexArg(nd.args[0],ctx);
+			addRefAndIndexArg(nd.args[1],ctx);
 			break;
 		}
 
 		case "{}/1":
 		case "\\+/1":{
 			let nd = node as Compound;
-			indexArgs(nd.args[0],ctx);
+			addRefAndIndexArg(nd.args[0],ctx);
 			break;
 		}
 	
@@ -199,19 +206,95 @@ function ruleEval(node:CstNode,ctx:AnalyseCtx) {
 		}
 		case "op/3":{
 			let args =  (node as Compound).args;
-			indexArgs(node,ctx);
+			addRefAndIndexArg(node,ctx);
 			ctx.optable.op(args[0],args[1],args[2],ctx);
 			return
 		}	
 		
 		case "use_module/1":{
-			
+			addReference(node,ctx);
+			let nd = node as Compound;
+			return use_module_1(nd.args[0],ctx);
+		}
+		case "module/2":{
+			let nd = node as Compound;
+			module_2(nd.args[0],nd.args[1],ctx);
 		}
 		default:{
-			addReference(node,ctx);
-			indexArgs(node,ctx);
+			addRefAndIndexArg(node,ctx);
 		}
 
 	}
 }
 
+function use_module_1(node:CstNode,ctx:AnalyseCtx) {
+	switch (node.name){
+		case "library/1":{
+			addReference(node,ctx)
+			let nd = node as Compound;
+			return library(nd.args[0]);
+		}
+
+		default:{
+			let filename:string = node.value+".pl";
+			let uri = URI.parse(ctx.uri);
+			let dirpath =path.dirname(uri.fsPath);
+			let targetPath = path.join(dirpath,filename)
+			let targetURI = URI.file(targetPath);
+			let content="";
+			let targetURIStr = targetURI.toString();
+			if (g.DocumentManager.has(targetURIStr)){
+				let docObj = g.DocumentManager.get(targetURIStr);
+				if(!docObj){
+					return;
+				}
+				ctx.optable.absorb(docObj.optable,ctx);
+				return;
+			}
+			try{
+				g.DocumentManager.set(targetURIStr,undefined);
+				content = fs.readFileSync(targetPath).toString();
+			}catch{
+				error(node.getRange(),"can't read this file",ctx);
+				return
+			}
+			let parser = new MyParser(targetURIStr);
+			parser.reset(content);
+			let documentObj = parser.parse();
+			g.DocumentManager.set(targetURIStr,documentObj);
+			ctx.optable.absorb(documentObj.optable,ctx);
+			
+			
+
+
+		}
+			// g.DocumentManager.get()
+	}
+}
+
+function library(node:CstNode) {
+	
+}
+
+function module_2(moduleName:CstNode,List:CstNode,ctx:AnalyseCtx) {
+	if(check(moduleName,isAtom,ctx)&&check(List,isList,ctx)){
+		return publicList(List,ctx);
+	}
+}
+
+function publicList(node: List|CstNode,ctx:AnalyseCtx):void {
+	if(node.name == "[|]/2"){
+		let list = node as List;
+		let head = list.args[0];
+		if(head.name == "op/3"){
+			addRefAndIndexArg(head,ctx);
+			let args = (head as Compound).args;
+			ctx.optable.op(args[0],args[1],args[2],ctx);
+			return publicList(list.args[1],ctx);
+		}
+	}
+	else{
+		return addRefAndIndexArg(node,ctx);
+	}
+	
+}

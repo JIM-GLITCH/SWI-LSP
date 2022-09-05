@@ -19,7 +19,7 @@ interface DocumentObj{
 
 let g={
 	x:"123",
-	DocumentManager: new Map<DocumentUri,DocumentObj>(),
+	DocumentManager: new Map<DocumentUri,DocumentObj|undefined>(),
 	PrologLibPath : (() => {
 		if (process.platform === "win32") {
 			let swiplPath = child_process.execSync("where.exe swipl").toString()

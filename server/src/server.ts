@@ -154,18 +154,13 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 	const settings = await getDocumentSettings(textDocument.uri)
 	const text = textDocument.getText()
 	const uri = textDocument.uri
-	// const fileState = new FileState(textDocument)
+	DocumentManager.set(uri,undefined);
 
 	
 // (new Parser(fileState)).parseTextWithState(text)
-	let parser =new MyParser();
+	let parser =new MyParser(uri);
 	parser.reset(text);
 	let documentObj =await parser.parse();
-	// while(!DocumentManager.get(uri)){
-	// 	await sleep(1000);
-	// }
-	// doc = DocumentManager.get(uri);
-	// doc.fileCst = fileCst;
 	DocumentManager.set(uri,documentObj)
 
 

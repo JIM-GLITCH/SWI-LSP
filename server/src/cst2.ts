@@ -1,6 +1,6 @@
 
 import { Token } from 'moo'
-import { Diagnostic, DiagnosticSeverity, Position, Range } from 'vscode-languageserver'
+import { Diagnostic, DiagnosticSeverity, DocumentUri, Position, Range } from 'vscode-languageserver'
 import { index } from './indexer'
 import { type Graph } from './graph'
 import { tokenList } from './lexer-by-moo'
@@ -43,6 +43,7 @@ interface AnalyseCtx{
 	optable:optable
 	diagnostics:Diagnostic[]
 	clause:clause
+	uri:DocumentUri
 }
 
 interface CstNode{
