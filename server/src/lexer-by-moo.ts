@@ -26,9 +26,7 @@ let lexer = moo.compile({
   ht_sep:"|",
   string:[
     {match:/"(?:""|\\(?:.|\n)|(?!").)*"/,lineBreaks:true},
-    {match:/"(?:""|\\(?:.|\n)|(?!").)*\n/,lineBreaks:true}, //error-recovery
     {match:/`(?:``|\\(?:.|\n)|(?!").)*`/,lineBreaks:true},
-    {match:/`(?:``|\\(?:.|\n)|(?!").)*\n/,lineBreaks:true} //error-recovery
   ],
   var:{match:/[_A-Z][_0-9a-zA-Z]*/},
   integer:[
@@ -45,23 +43,27 @@ let lexer = moo.compile({
     {match:/[a-z][_0-9a-zA-Z]*/},
     {match:/[#$&*+\-./:<=>?@^~\\]+/},
     {match:/'(?:''|\\(?:.|\n)|(?!').)*'/,lineBreaks:true},
-    {match:/'(?:''|\\(?:.|\n)|(?!').)*\n/,lineBreaks:true},//error-recovery
   ],
-  // error:moo.error
+  error:{match:/./}
 })
-type tokenList = {tokens:token[],end:token|undefined}
-
-interface Mylexer extends moo.Lexer{
-  getTokens() :tokenList
-  clone():Mylexer
+type tokenList = {
+  tokens:token[],
+  end:token|undefined,
+  errors:token[]
 }
 
-let mylexer  = lexer as Mylexer;
+interface Lexer extends moo.Lexer{
+  getTokens() :tokenList
+  clone():Lexer
+}
+
+let mylexer  = lexer as Lexer;
 
 let MyLexerPrototype = mylexer.constructor.prototype;
 MyLexerPrototype.getTokens = function(){
-  let tokenList:tokenList={tokens:[],end:undefined};
+  let tokenList:tokenList={tokens:[],end:undefined,errors:[]};
   let tokens = tokenList.tokens;
+  let errors = tokenList.errors;
   while(true){
     let token= this.next();
     //遇到结尾 返回
@@ -76,6 +78,10 @@ MyLexerPrototype.getTokens = function(){
       continue;
     }
     //遇到 . 返回
+    if(token.type=="error"){
+      errors.push(token);
+      continue
+    }
     if(token.type=="end"){
       tokenList.end = token;
       return tokenList;

@@ -288,7 +288,7 @@ class TwoTokenToOne implements Token{
 
 class clause {
 	callerNode?: CstNode
-	async analyse(ctx:AnalyseCtx) {
+	analyse(ctx:AnalyseCtx) {
 		if(this.term){
 			index(this.term,ctx);
 		}    

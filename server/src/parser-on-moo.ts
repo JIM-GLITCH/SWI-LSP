@@ -11,7 +11,7 @@ import { Flag as F } from './context_flags'
 import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver'
 import { Graph } from './graph'
 import { error, warning } from "./pushDiagnostic"
-export { MyParser }
+export { Parser as MyParser }
 interface infixop {
 	lPrec: number
 	opPrec: number
@@ -27,7 +27,7 @@ interface AnsS {
 	Answer: any
 	S: TokenIter
 }
-class MyParser {
+class Parser {
 	lexer
 	optable
 	uri: string
@@ -65,6 +65,9 @@ class MyParser {
 
 	next(): clause | undefined {
 		let tokenList = this.lexer.getTokens()
+		for (const token of tokenList.errors) {
+			error(tokenRange(token),"invlid token",this);
+		}
 		if (tokenList.tokens.length == 0) {
 			return undefined
 		}
@@ -377,8 +380,7 @@ class MyParser {
 					if (!r) {
 						return undefined
 					}
-					let left = node.args.pop()
-					node.args.push(new infix_compound(token1, [left, r.Answer]))
+					node.args.push(r.Answer)
 					let S3 = this.expect("]", r.S)
 					if (!S3) {
 						return undefined
@@ -402,7 +404,7 @@ class MyParser {
 		let S2 = S1.next()
 		let token1 = S1.val()
 		let token2 = S2.val()
-		let NewS: TokenIter
+		// let NewS: TokenIter
 
 
 		{
@@ -418,7 +420,7 @@ class MyParser {
 
 		{
 			for (let isOp of this.peepop(token1, token2)) {
-				if (this.prefix_is_atom(token1, Oprec)) {
+				if ( isOp && this.prefix_is_atom(token1, Oprec)) {
 					yield* this.exprtl(S1, Oprec, new Atomic(Op), Prec, ctx)
 				}
 			}
@@ -435,7 +437,7 @@ class MyParser {
 	}
 	*peepop(token1: Token | undefined, token2: Token | undefined) {
 		if (token1?.type == "atom") {
-			if (token2?.type == "close") {
+			if (token2?.type == "open") {
 				yield false
 				return
 			}
