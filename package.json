@@ -3,7 +3,7 @@
 	"description": "A language server for SWI-Prolog",
 	"author": "lilr",
 	"license": "MIT",
-	"version": "1.0.5",
+	"version": "1.0.7",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/JIM-GLITCH/SWI-LSP"
@@ -56,7 +56,6 @@
 		}
 	},
 	"scripts": {
-		"antlr4ts": "antlr4ts -visitor ./antlr4test/MyGrammar.g4",
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -b",
 		"watch": "tsc -b -w",

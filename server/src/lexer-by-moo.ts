@@ -9,12 +9,12 @@ let lexer = moo.compile({
    * 
   */
   end:{match:/\.(?=\t|\n|\r|$(?![\r\n])|%| )/},
-  open_ct: {match:/\s+\(/,lineBreaks:true},
+  open: {match:/\s+\(/,lineBreaks:true},
   ws:      {match:/\s+/,lineBreaks:true},
   line_comment: {match:/\%.*?$/,lineBreaks:true},
-  block_comment: {match:/\/\*(?:.|\s|\n)*?\*\//,lineBreaks:true},
+  block_comment: {match:/\/\*[\s\S]*?\*\//,lineBreaks:true},
   cut:{match:"!",type:()=>"atom"},
-  open:"(",
+  open_ct:"(",
   clsoe:")",
   comma:",",
   semicolon:{ match:";",type:()=>"atom"},
@@ -85,7 +85,7 @@ MyLexerPrototype.getTokens = function(){
     if(token.type=="end"){
       tokenList.end = token;
       return tokenList;
-    }
+    } 
     //遇到一般 token 添加到tokens里
     tokens.push(token);
   }

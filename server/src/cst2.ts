@@ -389,7 +389,9 @@ function tokenToRange( startTk:Token,endTk:Token):Range{
 		},
 		end:{
 			line:endTk.line+endTk.lineBreaks-1,
-			character:endTk.lineBreaks?(endTk.text.length-endTk.text.lastIndexOf("\n")-1):(endTk.col+endTk.text.length-1)
+			character:endTk.lineBreaks
+				?	(endTk.text.length-endTk.text.lastIndexOf("\n")-1)
+				:	(endTk.col+endTk.text.length-1)
 		}
 	}
 }

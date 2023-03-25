@@ -5,7 +5,6 @@ import {
 	Compound, prefix_compound, infix_compound, postfix_compound, Negetive, clause, CstNode, Atomic, fileCst, List, tokenRange, dict
 	, AnalyseCtx
 } from './cst2'
-// import { OpTable } from './op_table'
 import { optable } from "./operators"
 import { Flag as F } from './context_flags'
 import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver'
@@ -27,7 +26,15 @@ interface AnsS {
 	Answer: any
 	S: TokenIter
 }
-class Parser {
+/**
+ * 	TODO: because non-deterministic, need to keep the errors temporarily 
+ * 	before parsing a clause is done.
+ * 
+ * 	after done, if success then drop all the errors,	
+				else push all the errors.
+ * 	
+ */
+class Parser{
 	lexer
 	optable
 	uri: string
@@ -165,7 +172,7 @@ class Parser {
 					yield* this.exprtl0(S3, new Negetive(token1, token2), Prec, ctx)
 					return
 				}
-				else if (token2?.type == "open") {
+				else if (token2?.type == "open_ct") {
 					for (let r of this.read(S3, 1200, 0 | F.COMMA_TERMINATES)) {
 						if (!r) {
 							return undefined
@@ -419,15 +426,22 @@ class Parser {
 		}
 
 		{
-			for (let isOp of this.peepop(token1, token2)) {
-				if ( isOp && this.prefix_is_atom(token1, Oprec)) {
+			for (let _ of this.peepop(token1, token2)) {
+				if ( this.prefix_is_atom(token1, Oprec)) {
 					yield* this.exprtl(S1, Oprec, new Atomic(Op), Prec, ctx)
 				}
 			}
 		}
 
-		{
-			let r = this.read(S1, _Aprec, ctx).next().value
+		// {
+		// 	let r = this.read(S1, _Aprec, ctx).next().value
+		// 	if (!r) {
+		// 		return undefined
+		// 	}
+		// 	let Term = new prefix_compound(Op, [r.Answer])
+		// 	yield* this.exprtl(r.S, Oprec, Term, Prec, ctx)
+		// }
+		for (const r of this.read(S1, _Aprec, ctx)) {
 			if (!r) {
 				return undefined
 			}
@@ -437,26 +451,25 @@ class Parser {
 	}
 	*peepop(token1: Token | undefined, token2: Token | undefined) {
 		if (token1?.type == "atom") {
-			if (token2?.type == "open") {
-				yield false
+			if (token2?.type == "open_ct") {
+				yield true
 				return
 			}
 			let isinfix = this.infixop(token1.text)
 			if (isinfix) {
 				(token1 as infixToken).infix = isinfix
 				yield true
+				delete (token1 as any).infix
 			}
 			let ispostfix = this.postfixop(token1.text)
 			if (ispostfix) {
 				delete (token1 as any).infix;
 				(token1 as postfixToken).postfix = ispostfix
 				yield true
+				delete (token1 as any ).postfix;
 			}
 		}
-		delete (token1 as any | undefined)?.infix
-		delete (token1 as any | undefined)?.postfix
-		yield false
-
+		yield true
 	}
 
 	prefix_is_atom(token: Token | undefined, P: number) {
@@ -594,7 +607,7 @@ class Parser {
 			}
 			else if (ispostfix(token0) && Prec >= token0.postfix.opPrec && C <= token0.postfix.lPrec) {
 				let Expr = new postfix_compound(token0!, [Term])
-				for (let r of this.peepop(token1, token2)) {
+				for (let _ of this.peepop(token1, token2)) {
 					yield* this.exprtl(S1, token0.postfix.opPrec, Expr, Prec, ctx)
 				}
 				return

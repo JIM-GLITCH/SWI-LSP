@@ -10,6 +10,5 @@
 	"todo-tree.tree.scanMode": "workspace only",
 	"files.associations": {
 		"*.pl": "prolog",
-		"pl-arith.h": "c"
 	}
 }
